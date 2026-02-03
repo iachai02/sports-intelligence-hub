@@ -2,8 +2,6 @@
 
 from datetime import date
 
-import pytest
-
 from core.schemas import GameSchema, PlayerSchema
 
 

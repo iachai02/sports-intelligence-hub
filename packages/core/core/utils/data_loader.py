@@ -1,7 +1,6 @@
 """NBA data fetching with caching."""
 
 import time
-from pathlib import Path
 
 import diskcache
 import pandas as pd

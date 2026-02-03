@@ -32,6 +32,8 @@ ignore = ["E501"]
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
+explicit_package_bases = true
+exclude = ["tests/"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

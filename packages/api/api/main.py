@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import health
+from api.routers import draft, health
 
 # Load environment variables from .env file
 load_dotenv()
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
 
     # Register routers
     app.include_router(health.router, tags=["health"])
+    app.include_router(draft.router, tags=["draft"])
 
     return app
 

@@ -3,11 +3,10 @@
 import os
 
 import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
-
 from core.db import get_db_url
 from core.db.models import Base, Game, Player
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 
 @pytest.fixture
