@@ -1,19 +1,39 @@
 # Sports Intelligence Hub — Product Requirements Document
 
-**Version:** 1.0
-**Author:** ML Engineering Team
+**Version:** 2.0
+**Last Updated:** 2026-02-02
 **Status:** POC Planning
-**Target:** Investor/Recruiter Demo
+**Target:** Recruiter Demo (ML + Full-Stack)
 
 ---
 
 ## Executive Summary
 
-The Sports Intelligence Hub is a **production-grade ML platform** that demonstrates end-to-end machine learning engineering capabilities through two high-value sports analytics modules. This project showcases optimization algorithms, predictive modeling, explainable AI, and modern MLOps practices—all deployed in a professional monorepo architecture.
+The Sports Intelligence Hub is a **production-grade ML platform** demonstrating end-to-end machine learning engineering through two core modules: a Fantasy Draft Optimizer and a Game Winner Predictor. The key differentiator is **LLM-powered scouting reports** that translate raw model outputs into human-readable analysis via streaming Gemini responses.
 
-**Feasibility Assessment:** ✅ **VIABLE FOR MVP IN 4-6 WEEKS**
+This project showcases:
+- Feature engineering and predictive modeling (XGBoost)
+- Mathematical optimization (Linear Programming)
+- Explainable AI (SHAP with dual technical/plain-English modes)
+- LLM integration with streaming responses
+- Modern MLOps practices (Docker, MLflow, CI/CD)
+- Full-stack development (FastAPI + React + PostgreSQL)
 
-The scope is intentionally constrained to two well-defined modules with clear data sources, established ML techniques, and measurable outcomes. This makes it ideal for investor demonstrations while remaining technically impressive for engineering recruiters.
+**Target Audience:** ML/Data Science and Full-Stack recruiters evaluating end-to-end project capability.
+
+---
+
+## Scope Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Sport** | NBA only (MVP) | Faster iteration, NFL added later |
+| **Fantasy Format** | Yahoo/ESPN Standard (9-cat) | Most common format, clear roster rules |
+| **Prediction Target** | Game winner | Simpler than player-level clutch, clear evaluation |
+| **Differentiator** | LLM scouting reports | Leverages existing RAG/LLM experience, unique angle |
+| **Training Data** | Last 3 seasons (~3,600 games) | Recent enough to reflect current NBA style |
+| **Cost Constraint** | Free tier only | Gemini free tier, Vercel free, local Docker |
+| **Timeline** | 3+ months | Learning-focused, no rush |
 
 ---
 
@@ -32,47 +52,71 @@ sports-intelligence-hub/
 │   │   ├── src/
 │   │   │   ├── schemas/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── player.py         # Unified player schema
-│   │   │   │   ├── game.py           # Unified game schema
-│   │   │   │   └── prediction.py     # ML output schemas
+│   │   │   │   ├── player.py         # Player data schema
+│   │   │   │   ├── game.py           # Game data schema
+│   │   │   │   ├── prediction.py     # ML output schemas
+│   │   │   │   └── report.py         # Scouting report schema
 │   │   │   ├── utils/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── data_loader.py
 │   │   │   │   └── validators.py
+│   │   │   ├── db/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── models.py         # SQLAlchemy models
+│   │   │   │   └── connection.py     # PostgreSQL connection
 │   │   │   └── __init__.py
 │   │   ├── tests/
 │   │   ├── pyproject.toml
 │   │   └── README.md
 │   │
-│   ├── draft-optimizer/              # Module 1: Linear Programming
-│   │   ├── src/
-│   │   │   ├── models/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── auction_lp.py     # PuLP optimization model
-│   │   │   │   └── constraints.py    # Budget, roster rules
-│   │   │   ├── services/
-│   │   │   │   ├── __init__.py
-│   │   │   │   ├── projections.py    # Player value projections
-│   │   │   │   └── optimizer.py      # Main optimization service
-│   │   │   └── __init__.py
-│   │   ├── tests/
-│   │   ├── pyproject.toml
-│   │   └── README.md
-│   │
-│   ├── impact-simulator/             # Module 2: Predictive ML
+│   ├── draft-optimizer/              # Module 1: Fantasy Draft
 │   │   ├── src/
 │   │   │   ├── features/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── clutch_metrics.py # Feature engineering
-│   │   │   │   └── game_context.py   # Situational features
+│   │   │   │   └── player_features.py  # Feature engineering for projections
 │   │   │   ├── models/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── xgboost_model.py  # Core predictor
-│   │   │   │   └── explainer.py      # SHAP integration
+│   │   │   │   ├── projection_model.py # XGBoost player projections
+│   │   │   │   ├── auction_lp.py       # PuLP optimization model
+│   │   │   │   └── constraints.py      # Budget, roster rules
+│   │   │   ├── services/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── optimizer.py        # Main optimization service
+│   │   │   └── __init__.py
+│   │   ├── tests/
+│   │   ├── pyproject.toml
+│   │   └── README.md
+│   │
+│   ├── game-predictor/               # Module 2: Game Winner Prediction
+│   │   ├── src/
+│   │   │   ├── features/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── team_features.py    # Team-level features
+│   │   │   │   ├── matchup_features.py # Head-to-head features
+│   │   │   │   └── context_features.py # Rest days, home/away, etc.
+│   │   │   ├── models/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── xgboost_model.py    # Core predictor
+│   │   │   │   └── explainer.py        # SHAP integration
 │   │   │   ├── training/
 │   │   │   │   ├── __init__.py
-│   │   │   │   ├── pipeline.py       # Scikit-learn pipeline
-│   │   │   │   └── hyperopt.py       # Optuna tuning
+│   │   │   │   ├── pipeline.py         # Scikit-learn pipeline
+│   │   │   │   └── hyperopt.py         # Optuna tuning
+│   │   │   └── __init__.py
+│   │   ├── tests/
+│   │   ├── pyproject.toml
+│   │   └── README.md
+│   │
+│   ├── scouting-reports/             # Module 3: LLM Report Generation
+│   │   ├── src/
+│   │   │   ├── prompts/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── game_preview.py     # Pre-game analysis prompt
+│   │   │   │   └── draft_analysis.py   # Draft recommendation prompt
+│   │   │   ├── services/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── gemini_client.py    # Gemini API with streaming
+│   │   │   │   └── report_generator.py # Orchestrates report creation
 │   │   │   └── __init__.py
 │   │   ├── tests/
 │   │   ├── pyproject.toml
@@ -82,13 +126,19 @@ sports-intelligence-hub/
 │       ├── src/
 │       │   ├── routers/
 │       │   │   ├── __init__.py
-│       │   │   ├── draft.py          # /api/v1/draft/*
-│       │   │   ├── simulator.py      # /api/v1/simulate/*
-│       │   │   └── health.py         # /api/v1/health
+│       │   │   ├── draft.py            # /api/v1/draft/*
+│       │   │   ├── predictions.py      # /api/v1/predictions/*
+│       │   │   ├── reports.py          # /api/v1/reports/* (streaming)
+│       │   │   ├── auth.py             # /api/v1/auth/* (OAuth)
+│       │   │   └── health.py           # /api/v1/health
 │       │   ├── middleware/
 │       │   │   ├── __init__.py
 │       │   │   └── logging.py
-│       │   ├── main.py               # FastAPI app factory
+│       │   ├── auth/
+│       │   │   ├── __init__.py
+│       │   │   ├── oauth.py            # Google/GitHub OAuth
+│       │   │   └── jwt.py              # Token handling
+│       │   ├── main.py                 # FastAPI app factory
 │       │   └── __init__.py
 │       ├── tests/
 │       ├── pyproject.toml
@@ -101,16 +151,31 @@ sports-intelligence-hub/
 │       │   │   ├── DraftOptimizer/
 │       │   │   │   ├── PlayerTable.tsx
 │       │   │   │   ├── BudgetSlider.tsx
+│       │   │   │   ├── RosterBuilder.tsx
 │       │   │   │   └── OptimalLineup.tsx
-│       │   │   ├── ImpactSimulator/
-│       │   │   │   ├── PlayerSelector.tsx
-│       │   │   │   ├── ScenarioBuilder.tsx
-│       │   │   │   └── ShapWaterfall.tsx
+│       │   │   ├── GamePredictor/
+│       │   │   │   ├── MatchupCard.tsx
+│       │   │   │   ├── PredictionDisplay.tsx
+│       │   │   │   ├── ShapWaterfall.tsx
+│       │   │   │   └── ShapSimple.tsx     # Human-readable mode
+│       │   │   ├── ScoutingReport/
+│       │   │   │   ├── ReportViewer.tsx
+│       │   │   │   └── StreamingText.tsx  # Typewriter effect
+│       │   │   ├── Admin/
+│       │   │   │   ├── ModelMetrics.tsx
+│       │   │   │   ├── PipelineHealth.tsx
+│       │   │   │   └── DataFreshness.tsx
 │       │   │   └── shared/
-│       │   │       ├── SportToggle.tsx
+│       │   │       ├── Navbar.tsx
+│       │   │       ├── AuthButton.tsx
 │       │   │       └── Dashboard.tsx
 │       │   ├── hooks/
+│       │   │   ├── useAuth.ts
+│       │   │   ├── useStreamingReport.ts
+│       │   │   └── usePrediction.ts
 │       │   ├── lib/
+│       │   │   ├── api.ts
+│       │   │   └── auth.ts
 │       │   └── App.tsx
 │       ├── package.json
 │       ├── tailwind.config.js
@@ -121,12 +186,12 @@ sports-intelligence-hub/
 │   ├── docker/
 │   │   ├── Dockerfile.api
 │   │   ├── Dockerfile.ml
-│   │   └── docker-compose.yml
-│   ├── k8s/                          # Optional: K8s manifests
-│   │   ├── api-deployment.yaml
-│   │   └── ml-job.yaml
-│   └── terraform/                    # Optional: IaC
-│       └── main.tf
+│   │   └── docker-compose.yml        # Local dev with PostgreSQL
+│   ├── aws/                          # Learning AWS deployment
+│   │   ├── ecs-task-definition.json
+│   │   └── README.md
+│   └── scripts/
+│       └── setup-local.sh
 │
 ├── mlflow/                           # Model registry & experiments
 │   ├── mlruns/
@@ -134,22 +199,26 @@ sports-intelligence-hub/
 │
 ├── data/
 │   ├── raw/                          # Immutable source data
+│   │   └── nba/
 │   ├── processed/                    # Feature-engineered data
-│   └── models/                       # Serialized model artifacts
+│   │   └── nba/
+│   └── cache/                        # API response cache
 │
 ├── notebooks/                        # Exploration & prototyping
-│   ├── 01_data_exploration.ipynb
+│   ├── 01_nba_data_exploration.ipynb
 │   ├── 02_feature_engineering.ipynb
-│   └── 03_model_experiments.ipynb
+│   ├── 03_projection_model.ipynb
+│   ├── 04_game_prediction_model.ipynb
+│   └── 05_shap_explainability.ipynb
 │
 ├── scripts/
 │   ├── fetch_nba_data.py
-│   ├── fetch_nfl_data.py
-│   └── train_models.py
+│   ├── train_projection_model.py
+│   ├── train_game_predictor.py
+│   └── backtest_optimizer.py
 │
-├── pyproject.toml                    # Root workspace config (uv/Poetry)
+├── pyproject.toml                    # Root workspace config (uv)
 ├── uv.lock                           # Dependency lock file
-├── turbo.json                        # Turborepo config for monorepo
 ├── .pre-commit-config.yaml           # Code quality hooks
 ├── .env.example
 ├── Makefile                          # Common dev commands
@@ -158,10 +227,12 @@ sports-intelligence-hub/
 
 **Key Design Decisions:**
 - **`packages/`**: Python ML modules as isolated, testable units
-- **`apps/`**: User-facing applications (React web app)
-- **`infrastructure/`**: DevOps artifacts separated from business logic
-- **`mlflow/`**: Experiment tracking colocated for local development
-- **Monorepo tooling**: `uv` for Python workspaces, `Turborepo` for JS
+- **`packages/scouting-reports/`**: New module for LLM integration
+- **`apps/web/`**: React frontend with streaming support
+- **PostgreSQL**: Production-grade database for all persisted data
+- **OAuth**: Google/GitHub authentication built-in
+- **Admin components**: Model monitoring dashboard
+- **Monorepo tooling**: `uv` for Python workspaces
 
 </Directory_Structure>
 
@@ -171,103 +242,170 @@ sports-intelligence-hub/
 
 ## Data Sources
 
-| Sport | Primary Library | API/Source | Update Frequency |
-|-------|-----------------|------------|------------------|
-| **NBA** | `nba_api` | stats.nba.com | Daily during season |
-| **NFL** | `nfl_data_py` | Pro Football Reference | Weekly during season |
-| **Both** | `sportsreference` | Sports Reference sites | Backup source |
+| Data Type | Library | Source | Update Frequency |
+|-----------|---------|--------|------------------|
+| **Player Stats** | `nba_api` | stats.nba.com | Daily during season |
+| **Game Results** | `nba_api` | stats.nba.com | After each game |
+| **Team Stats** | `nba_api` | stats.nba.com | Daily during season |
+| **Schedules** | `nba_api` | stats.nba.com | Start of season |
 
 ### Python Libraries
 
 ```python
 # Core data acquisition
-nba_api>=1.4.1          # Official NBA stats API wrapper
-nfl_data_py>=0.3.1      # NFL play-by-play & roster data
-sportsreference>=0.6.0  # Fallback scraper
+nba_api>=1.4.1              # Official NBA stats API wrapper
 
 # Data processing
 pandas>=2.2.0
-polars>=0.20.0          # High-performance alternative
-pyarrow>=15.0.0         # Parquet I/O
+polars>=0.20.0              # High-performance for large datasets
+pyarrow>=15.0.0             # Parquet I/O
+
+# Database
+sqlalchemy>=2.0.0           # ORM
+asyncpg>=0.29.0             # Async PostgreSQL driver
+alembic>=1.13.0             # Database migrations
 
 # Validation
-pydantic>=2.6.0         # Schema enforcement
-pandera>=0.18.0         # DataFrame validation
+pydantic>=2.6.0             # Schema enforcement
+pandera>=0.18.0             # DataFrame validation
+
+# Caching (for API rate limits)
+diskcache>=5.6.0            # Local file-based cache
 ```
 
-## Unified Schema Design
+## Database Schema (PostgreSQL)
 
-The key insight is that **both sports share common abstractions**: players perform in games within specific contexts, and we want to predict/optimize their value.
+```sql
+-- Core tables
+CREATE TABLE players (
+    id SERIAL PRIMARY KEY,
+    nba_player_id VARCHAR(20) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    team VARCHAR(50),
+    position VARCHAR(10),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE games (
+    id SERIAL PRIMARY KEY,
+    nba_game_id VARCHAR(20) UNIQUE NOT NULL,
+    season VARCHAR(10) NOT NULL,           -- "2024-25"
+    game_date DATE NOT NULL,
+    home_team VARCHAR(50) NOT NULL,
+    away_team VARCHAR(50) NOT NULL,
+    home_score INTEGER,
+    away_score INTEGER,
+    winner VARCHAR(50),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE player_game_stats (
+    id SERIAL PRIMARY KEY,
+    player_id INTEGER REFERENCES players(id),
+    game_id INTEGER REFERENCES games(id),
+    minutes FLOAT,
+    points INTEGER,
+    rebounds INTEGER,
+    assists INTEGER,
+    steals INTEGER,
+    blocks INTEGER,
+    turnovers INTEGER,
+    fg_pct FLOAT,
+    ft_pct FLOAT,
+    three_pct FLOAT,
+    fantasy_points FLOAT,                  -- Calculated 9-cat score
+    UNIQUE(player_id, game_id)
+);
+
+-- Predictions & Reports
+CREATE TABLE game_predictions (
+    id SERIAL PRIMARY KEY,
+    game_id INTEGER REFERENCES games(id),
+    model_version VARCHAR(50) NOT NULL,
+    predicted_winner VARCHAR(50) NOT NULL,
+    win_probability FLOAT NOT NULL,
+    shap_values JSONB,                     -- Stored for explainability
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE scouting_reports (
+    id SERIAL PRIMARY KEY,
+    game_id INTEGER REFERENCES games(id),
+    report_type VARCHAR(20) NOT NULL,      -- "game_preview", "draft_analysis"
+    content TEXT NOT NULL,
+    model_used VARCHAR(50) NOT NULL,       -- "gemini-1.5-flash"
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Auth
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(100),
+    oauth_provider VARCHAR(20) NOT NULL,   -- "google", "github"
+    oauth_id VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_login TIMESTAMP
+);
+```
+
+## Data Pipeline Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Data Ingestion Layer                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌──────────┐      ┌──────────────┐      ┌────────────────┐   │
+│   │ nba_api  │─────▶│ Rate Limiter │─────▶│ Local Cache    │   │
+│   └──────────┘      │ (1 req/sec)  │      │ (diskcache)    │   │
+│                     └──────────────┘      └───────┬────────┘   │
+│                                                   │             │
+│                                                   ▼             │
+│                     ┌──────────────────────────────────────┐   │
+│                     │         Pandera Validation            │   │
+│                     │    (Schema enforcement on DataFrames) │   │
+│                     └──────────────────┬───────────────────┘   │
+│                                        │                        │
+│                                        ▼                        │
+│                     ┌──────────────────────────────────────┐   │
+│                     │           PostgreSQL                  │   │
+│                     │   (players, games, player_game_stats) │   │
+│                     └──────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Caching Strategy (Free Tier Friendly)
 
 ```python
-# packages/core/src/schemas/player.py
-from pydantic import BaseModel
-from enum import Enum
-from datetime import date
+# packages/core/src/utils/data_loader.py
+import diskcache
+from nba_api.stats.endpoints import leaguegamefinder
+import time
 
-class Sport(str, Enum):
-    NBA = "nba"
-    NFL = "nfl"
+class NBADataLoader:
+    def __init__(self, cache_dir: str = "data/cache"):
+        self.cache = diskcache.Cache(cache_dir)
+        self.rate_limit_delay = 1.0  # 1 second between requests
 
-class Position(BaseModel):
-    """Sport-agnostic position representation"""
-    sport: Sport
-    primary: str          # "PG", "QB", "WR", etc.
-    eligible: list[str]   # Flex eligibility
+    def get_games(self, season: str, force_refresh: bool = False) -> pd.DataFrame:
+        cache_key = f"games_{season}"
 
-class UnifiedPlayer(BaseModel):
-    """Cross-sport player schema"""
-    id: str               # "{sport}_{player_id}"
-    sport: Sport
-    name: str
-    team: str
-    position: Position
+        if not force_refresh and cache_key in self.cache:
+            return self.cache[cache_key]
 
-    # Fantasy-relevant stats (normalized)
-    projected_points: float       # Per-game projection
-    auction_value: float          # Dollar value ($1-$100 scale)
-    consistency_score: float      # Coefficient of variation
-    upside_score: float           # 90th percentile outcome
+        time.sleep(self.rate_limit_delay)  # Rate limiting
 
-    # Context metadata
-    injury_status: str | None
-    bye_week: int | None          # NFL only
-    last_updated: date
+        games = leaguegamefinder.LeagueGameFinder(
+            season_nullable=season,
+            league_id_nullable="00"
+        ).get_data_frames()[0]
 
-class UnifiedGameContext(BaseModel):
-    """Situational context for predictions"""
-    sport: Sport
-    game_id: str
-
-    # Universal context features
-    home_away: str                # "home" | "away"
-    opponent_rank: int            # Defensive rank vs position
-    rest_days: int
-
-    # Clutch context
-    score_differential: int       # Point spread at decision time
-    time_remaining: float         # Normalized (0-1)
-    high_leverage: bool           # Clutch situation flag
-
-    # Sport-specific (optional)
-    quarter_period: int | None    # NBA: 1-4, OT; NFL: 1-4
-    down_distance: str | None     # NFL only: "3rd & 7"
-```
-
-### Data Pipeline Flow
-
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
-│  nba_api    │────▶│              │     │                 │
-│  nfl_data_py│────▶│ Transform &  │────▶│ UnifiedPlayer   │
-└─────────────┘     │ Validate     │     │ UnifiedContext  │
-                    │ (Pandera)    │     │ (Pydantic)      │
-                    └──────────────┘     └────────┬────────┘
-                                                  │
-                    ┌─────────────────────────────▼────────┐
-                    │         Parquet Data Lake            │
-                    │    data/processed/{sport}/           │
-                    └──────────────────────────────────────┘
+        self.cache.set(cache_key, games, expire=86400)  # 24h cache
+        return games
 ```
 
 </Data_Strategy>
@@ -276,165 +414,411 @@ class UnifiedGameContext(BaseModel):
 
 <ML_Phases>
 
-## Phase 1: Draft Optimizer (Linear Programming)
+## Phase 1: Draft Optimizer (ML Projections + LP Selection)
 
-**Objective:** Given a budget and roster constraints, select the optimal set of players to maximize projected fantasy points.
+**Objective:** Predict player fantasy points, then use Linear Programming to select the optimal roster within budget constraints.
 
-### Mathematical Formulation
+### Part A: Player Projection Model (XGBoost)
 
+**Target Variable:** `fantasy_points` (9-category Yahoo/ESPN scoring)
+
+```python
+# 9-Cat Fantasy Scoring (Yahoo/ESPN Standard)
+fantasy_points = (
+    points * 1.0 +
+    rebounds * 1.2 +
+    assists * 1.5 +
+    steals * 3.0 +
+    blocks * 3.0 +
+    turnovers * -1.0 +
+    fg_made * 0.5 +    # Adjust for FG%
+    ft_made * 0.5 +    # Adjust for FT%
+    three_made * 0.5   # 3PT bonus
+)
 ```
-Maximize:   Σ (projected_points[i] × x[i])   for all players i
-Subject to: Σ (auction_cost[i] × x[i]) ≤ budget
-            Σ x[i] = roster_size
-            Σ x[i] ≥ min_at_position[p]     for each position p
-            Σ x[i] ≤ max_at_position[p]     for each position p
-            x[i] ∈ {0, 1}                    binary decision variable
+
+### Feature Engineering for Projections
+
+```python
+# packages/draft-optimizer/src/features/player_features.py
+
+PROJECTION_FEATURES = {
+    "rolling_stats": [
+        "avg_fantasy_points_last_5",
+        "avg_fantasy_points_last_10",
+        "avg_fantasy_points_last_30",
+        "std_fantasy_points_last_10",    # Consistency measure
+    ],
+    "season_averages": [
+        "season_ppg",
+        "season_rpg",
+        "season_apg",
+        "season_minutes",
+    ],
+    "usage_context": [
+        "usage_rate",
+        "minutes_share",                  # % of team minutes
+        "is_starter",
+    ],
+    "matchup": [
+        "opponent_def_rating",            # Defensive efficiency
+        "opponent_pace",                  # Tempo affects stats
+        "days_rest",
+    ],
+    "situational": [
+        "is_home",
+        "is_back_to_back",
+        "games_played_season",            # Early season = volatile
+    ],
+}
 ```
 
-### Target Variables & Metrics
-
-| Variable | Description | Metric |
-|----------|-------------|--------|
-| `projected_points` | Expected fantasy points per game | MAE vs actual (< 3.0 pts) |
-| `optimal_lineup_value` | Total projected points of solution | % of theoretical max (> 95%) |
-| `solver_time` | Optimization runtime | < 500ms for 300 players |
-
-### Implementation Approach
+### Part B: Roster Optimization (PuLP Linear Programming)
 
 ```python
 # packages/draft-optimizer/src/models/auction_lp.py
 from pulp import LpMaximize, LpProblem, LpVariable, lpSum
 
 class AuctionOptimizer:
-    def __init__(self, budget: int, roster_rules: dict):
-        self.budget = budget
-        self.roster_rules = roster_rules
+    """
+    Yahoo/ESPN Standard Roster:
+    - PG: 1-2 players
+    - SG: 1-2 players
+    - SF: 1-2 players
+    - PF: 1-2 players
+    - C: 1-2 players
+    - Util: 1-3 players (any position)
+    - Total: 10 players
+    - Budget: $200
+    """
 
-    def solve(self, players: list[dict]) -> dict:
-        prob = LpProblem("Fantasy_Auction", LpMaximize)
+    ROSTER_RULES = {
+        "PG": {"min": 1, "max": 3},
+        "SG": {"min": 1, "max": 3},
+        "SF": {"min": 1, "max": 3},
+        "PF": {"min": 1, "max": 3},
+        "C": {"min": 1, "max": 3},
+    }
+    ROSTER_SIZE = 10
+    BUDGET = 200
 
-        # Decision variables
-        x = {p['id']: LpVariable(f"select_{p['id']}", cat='Binary')
-             for p in players}
+    def __init__(self, players: list[dict]):
+        """
+        players: List of dicts with keys:
+            - id, name, position, projected_points, auction_value
+        """
+        self.players = players
+        self.prob = LpProblem("Fantasy_Auction", LpMaximize)
+        self.x = {p["id"]: LpVariable(f"x_{p['id']}", cat="Binary")
+                  for p in players}
 
-        # Objective: maximize projected points
-        prob += lpSum(p['projected_points'] * x[p['id']] for p in players)
+    def build_model(self) -> None:
+        # Objective: maximize total projected fantasy points
+        self.prob += lpSum(
+            p["projected_points"] * self.x[p["id"]]
+            for p in self.players
+        ), "Total_Projected_Points"
 
         # Budget constraint
-        prob += lpSum(p['auction_value'] * x[p['id']] for p in players) <= self.budget
+        self.prob += lpSum(
+            p["auction_value"] * self.x[p["id"]]
+            for p in self.players
+        ) <= self.BUDGET, "Budget_Constraint"
 
-        # Position constraints (sport-specific rules applied here)
-        # ... constraint building logic
+        # Roster size constraint
+        self.prob += lpSum(
+            self.x[p["id"]] for p in self.players
+        ) == self.ROSTER_SIZE, "Roster_Size"
 
-        prob.solve()
-        return self._extract_solution(x, players)
+        # Position constraints
+        for pos, rules in self.ROSTER_RULES.items():
+            pos_players = [p for p in self.players if pos in p["position"]]
+            self.prob += lpSum(
+                self.x[p["id"]] for p in pos_players
+            ) >= rules["min"], f"Min_{pos}"
+            self.prob += lpSum(
+                self.x[p["id"]] for p in pos_players
+            ) <= rules["max"], f"Max_{pos}"
+
+    def solve(self) -> dict:
+        self.build_model()
+        self.prob.solve()
+
+        selected = [
+            p for p in self.players
+            if self.x[p["id"]].value() == 1
+        ]
+
+        return {
+            "status": self.prob.status,
+            "total_points": sum(p["projected_points"] for p in selected),
+            "total_cost": sum(p["auction_value"] for p in selected),
+            "roster": selected,
+        }
 ```
 
-### Evaluation Protocol
+### Evaluation Metrics (Phase 1)
 
-1. **Backtest on historical drafts** (2023-2025 seasons)
-2. **Compare against:** Greedy value-based drafting, ADP-based selection
-3. **Success metric:** Optimized lineups should score in top 20% of actual league outcomes
+| Metric | Target | What It Measures |
+|--------|--------|------------------|
+| **Projection MAE** | < 5.0 fantasy pts | How accurate are player projections |
+| **Projection RMSE** | < 7.0 fantasy pts | Penalizes large misses |
+| **Optimizer Runtime** | < 500ms | Speed for 300+ player pool |
+| **Backtest Top-20%** | > 60% of weeks | Optimized lineups beat random drafts |
 
 ---
 
-## Phase 2: Clutch Factor & Impact Simulator (Predictive ML)
+## Phase 2: Game Winner Prediction (XGBoost + SHAP)
 
-**Objective:** Predict a player's performance in high-leverage situations and explain which factors drive the prediction.
+**Objective:** Predict which team wins an NBA game and explain the key factors driving the prediction.
 
-### Target Variables
+### Target Variable
 
-| Target | Sport | Description | Type |
-|--------|-------|-------------|------|
-| `clutch_points` | NBA | Points scored in final 5 min, score within 5 | Regression |
-| `clutch_conversion` | NFL | Success rate on 3rd/4th down, 4th quarter | Classification |
-| `impact_delta` | Both | Performance vs. baseline in clutch | Regression |
+```python
+# Binary classification
+target = 1 if home_team_wins else 0
+```
 
 ### Feature Engineering
 
 ```python
-# packages/impact-simulator/src/features/clutch_metrics.py
+# packages/game-predictor/src/features/team_features.py
 
-FEATURE_GROUPS = {
-    "historical_clutch": [
-        "career_clutch_fg_pct",        # NBA
-        "career_4q_qbr",                # NFL
-        "clutch_attempts_last_10",
-        "clutch_success_rate_30d",
+GAME_PREDICTION_FEATURES = {
+    "team_strength": [
+        "home_team_win_pct_last_10",
+        "away_team_win_pct_last_10",
+        "home_team_net_rating",           # Off rating - Def rating
+        "away_team_net_rating",
+        "home_team_elo",                  # Running ELO rating
+        "away_team_elo",
     ],
-    "game_context": [
-        "score_differential",
-        "time_remaining_normalized",
-        "home_court_advantage",
-        "opponent_defensive_rating",
+    "recent_form": [
+        "home_team_streak",               # Positive = wins, negative = losses
+        "away_team_streak",
+        "home_team_avg_margin_last_5",
+        "away_team_avg_margin_last_5",
     ],
-    "fatigue_load": [
-        "minutes_played_game",          # NBA
-        "snap_count_pct",               # NFL
-        "back_to_back_flag",
-        "rest_days",
+    "matchup_history": [
+        "home_team_h2h_wins_season",      # Head-to-head this season
+        "home_team_h2h_avg_margin",
     ],
-    "matchup": [
-        "defender_rating",              # NBA: who's guarding them
-        "coverage_scheme",              # NFL: zone vs man
-        "historical_vs_opponent",
+    "rest_and_travel": [
+        "home_team_rest_days",
+        "away_team_rest_days",
+        "away_team_distance_traveled",    # Road trip fatigue
+        "home_team_b2b",                  # Back-to-back flag
+        "away_team_b2b",
+    ],
+    "injuries_availability": [
+        "home_team_injured_player_impact", # Sum of injured players' win shares
+        "away_team_injured_player_impact",
+    ],
+    "contextual": [
+        "is_rivalry_game",                # Lakers-Celtics, etc.
+        "month_of_season",                # Early season more volatile
+        "home_team_playoff_clinched",     # May rest starters
     ],
 }
 ```
 
-### Model Architecture
+### Model Pipeline
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                  Training Pipeline                       │
-├─────────────────────────────────────────────────────────┤
-│  Raw Features                                           │
-│       │                                                 │
-│       ▼                                                 │
-│  ┌─────────────┐   ┌─────────────┐   ┌──────────────┐  │
-│  │ Imputer     │──▶│ Scaler      │──▶│ Feature      │  │
-│  │ (KNN)       │   │ (RobustScl) │   │ Selector     │  │
-│  └─────────────┘   └─────────────┘   └──────┬───────┘  │
-│                                             │          │
-│                                             ▼          │
-│                                   ┌─────────────────┐  │
-│                                   │ XGBoostRegressor│  │
-│                                   │ (Optuna-tuned)  │  │
-│                                   └────────┬────────┘  │
-│                                            │           │
-│                                            ▼           │
-│                                   ┌─────────────────┐  │
-│                                   │ SHAP Explainer  │  │
-│                                   └─────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+```python
+# packages/game-predictor/src/training/pipeline.py
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import RobustScaler
+from sklearn.impute import KNNImputer
+from xgboost import XGBClassifier
+
+def create_training_pipeline() -> Pipeline:
+    return Pipeline([
+        ("imputer", KNNImputer(n_neighbors=5)),
+        ("scaler", RobustScaler()),
+        ("classifier", XGBClassifier(
+            n_estimators=200,
+            max_depth=6,
+            learning_rate=0.1,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            use_label_encoder=False,
+            eval_metric="logloss",
+        ))
+    ])
 ```
 
-### Evaluation Metrics
+### SHAP Explainability (Dual Mode)
+
+```python
+# packages/game-predictor/src/models/explainer.py
+import shap
+
+class GameExplainer:
+    def __init__(self, model, X_train):
+        self.explainer = shap.TreeExplainer(model)
+        self.feature_names = X_train.columns.tolist()
+
+    def explain(self, X_game, mode: str = "technical") -> dict:
+        shap_values = self.explainer.shap_values(X_game)
+
+        if mode == "technical":
+            return self._technical_explanation(shap_values, X_game)
+        else:
+            return self._human_readable_explanation(shap_values, X_game)
+
+    def _technical_explanation(self, shap_values, X_game) -> dict:
+        """Raw SHAP values for data scientists"""
+        return {
+            "base_value": float(self.explainer.expected_value),
+            "shap_values": dict(zip(self.feature_names, shap_values[0].tolist())),
+            "feature_values": dict(zip(self.feature_names, X_game.values[0].tolist())),
+        }
+
+    def _human_readable_explanation(self, shap_values, X_game) -> dict:
+        """Plain English for general users"""
+        # Map features to readable descriptions
+        feature_descriptions = {
+            "home_team_win_pct_last_10": "recent home team form",
+            "away_team_rest_days": "away team rest advantage",
+            "home_team_net_rating": "home team overall strength",
+            # ... more mappings
+        }
+
+        top_factors = self._get_top_factors(shap_values, n=5)
+
+        explanations = []
+        for feat, impact in top_factors:
+            direction = "helps" if impact > 0 else "hurts"
+            readable_name = feature_descriptions.get(feat, feat)
+            explanations.append({
+                "factor": readable_name,
+                "impact": f"{direction} home team",
+                "strength": abs(impact),
+            })
+
+        return {
+            "summary": self._generate_summary(explanations),
+            "factors": explanations,
+        }
+```
+
+### Evaluation Metrics (Phase 2)
 
 | Metric | Target | Rationale |
 |--------|--------|-----------|
-| **RMSE** | < 4.5 pts (NBA) | Primary accuracy metric |
-| **MAE** | < 3.2 pts (NBA) | Robust to outliers |
-| **R²** | > 0.35 | Clutch is inherently noisy; modest R² acceptable |
-| **Calibration** | MAPE < 15% | Predictions should be well-calibrated |
+| **Accuracy** | > 65% | Better than baseline (home team wins ~58%) |
+| **AUC-ROC** | > 0.70 | Measures ranking quality |
+| **Brier Score** | < 0.22 | Calibration of probabilities |
+| **Log Loss** | < 0.60 | Penalizes confident wrong predictions |
 
-### Explainability Output
+---
 
-```json
-{
-  "player": "Jayson Tatum",
-  "scenario": "4th Q, down 3, 2:30 remaining",
-  "prediction": {
-    "expected_points": 4.2,
-    "confidence_interval": [2.1, 6.8]
-  },
-  "shap_explanations": [
-    {"feature": "career_clutch_fg_pct", "impact": +1.8, "direction": "positive"},
-    {"feature": "minutes_played_game", "impact": -0.6, "direction": "negative"},
-    {"feature": "opponent_defensive_rating", "impact": +0.4, "direction": "positive"}
-  ],
-  "recommendation": "HIGH CONFIDENCE - Historical clutch performance is primary driver"
-}
+## Phase 3: LLM Scouting Reports (Gemini Streaming)
+
+**Objective:** Transform raw model outputs into engaging, human-readable scouting reports using Gemini with streaming responses.
+
+### Gemini Integration (Free Tier)
+
+```python
+# packages/scouting-reports/src/services/gemini_client.py
+import google.generativeai as genai
+from typing import AsyncGenerator
+
+class GeminiClient:
+    """
+    Gemini 1.5 Flash Free Tier Limits (as of 2026):
+    - 15 requests per minute
+    - 1 million tokens per minute
+    - 1,500 requests per day
+    """
+
+    def __init__(self, api_key: str):
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel("gemini-1.5-flash")
+
+    async def stream_report(
+        self,
+        prompt: str
+    ) -> AsyncGenerator[str, None]:
+        """Stream response chunks for real-time UI updates"""
+        response = await self.model.generate_content_async(
+            prompt,
+            stream=True
+        )
+
+        async for chunk in response:
+            if chunk.text:
+                yield chunk.text
+```
+
+### Report Generation Prompts
+
+```python
+# packages/scouting-reports/src/prompts/game_preview.py
+
+GAME_PREVIEW_PROMPT = """
+You are an NBA analyst writing a pre-game scouting report. Based on the data below,
+write an engaging 3-4 paragraph analysis that a basketball fan would enjoy reading.
+
+**Game:** {home_team} vs {away_team}
+**Date:** {game_date}
+
+**Model Prediction:**
+- Predicted Winner: {predicted_winner}
+- Win Probability: {win_probability:.1%}
+
+**Key Factors (from SHAP analysis):**
+{shap_factors}
+
+**Team Statistics:**
+- {home_team}: {home_record}, Net Rating: {home_net_rating:+.1f}
+- {away_team}: {away_record}, Net Rating: {away_net_rating:+.1f}
+
+**Recent Form:**
+- {home_team} last 5: {home_last_5}
+- {away_team} last 5: {away_last_5}
+
+Write the report in an engaging sports journalism style. Include:
+1. A hook/opening that captures the matchup narrative
+2. Analysis of why the model favors one team (referencing the SHAP factors)
+3. Key matchups or storylines to watch
+4. A confident but measured prediction
+
+Do NOT use bullet points. Write in flowing paragraphs.
+"""
+```
+
+### Streaming API Endpoint
+
+```python
+# packages/api/src/routers/reports.py
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+
+router = APIRouter(prefix="/api/v1/reports")
+
+@router.get("/game/{game_id}/preview")
+async def stream_game_preview(game_id: int):
+    """Stream scouting report with Server-Sent Events"""
+
+    async def generate():
+        # Get prediction and SHAP values
+        prediction = await get_prediction(game_id)
+
+        # Build prompt with data
+        prompt = build_game_preview_prompt(prediction)
+
+        # Stream from Gemini
+        async for chunk in gemini_client.stream_report(prompt):
+            yield f"data: {chunk}\n\n"
+
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream"
+    )
 ```
 
 </ML_Phases>
@@ -445,117 +829,148 @@ FEATURE_GROUPS = {
 
 ## Advanced Features for Technical Differentiation
 
-### 1. SHAP-Based Explainability Dashboard
+### 1. SHAP Explainability with Dual Display Modes
 
-**Why it matters:** Demonstrates understanding of Explainable AI (XAI), critical for stakeholder trust and regulatory compliance.
+**Why it matters:** Shows understanding of Explainable AI (XAI) and UX considerations for different audiences.
 
-```python
-# packages/impact-simulator/src/models/explainer.py
-import shap
-import mlflow
+**Implementation:**
+- Technical mode: Raw SHAP waterfall chart with feature names and values
+- Simple mode: Plain English explanations ("The Lakers' recent winning streak gives them an edge")
+- Toggle switch in UI to switch between modes
 
-class ClutchExplainer:
-    def __init__(self, model, X_train):
-        self.explainer = shap.TreeExplainer(model)
-        self.expected_value = self.explainer.expected_value
-
-    def explain_prediction(self, X_instance) -> dict:
-        shap_values = self.explainer.shap_values(X_instance)
-
-        # Log to MLflow for tracking
-        mlflow.log_dict({
-            "shap_values": shap_values.tolist(),
-            "base_value": float(self.expected_value)
-        }, "explanation.json")
-
-        return {
-            "shap_values": shap_values,
-            "feature_importance": self._rank_features(shap_values),
-            "waterfall_data": self._format_waterfall(X_instance, shap_values)
-        }
+```typescript
+// apps/web/src/components/GamePredictor/ShapToggle.tsx
+const ShapDisplay = ({ prediction, mode }: Props) => {
+  if (mode === "technical") {
+    return <ShapWaterfall data={prediction.shap_values} />;
+  }
+  return <ShapSimple factors={prediction.human_explanations} />;
+};
 ```
-
-**Frontend visualization:** Interactive waterfall chart showing how each feature pushes the prediction above/below baseline.
 
 ---
 
-### 2. MLflow Model Registry with A/B Versioning
+### 2. LLM-Powered Streaming Scouting Reports
 
-**Why it matters:** Shows production ML maturity—experiment tracking, model versioning, and deployment governance.
+**Why it matters:** Demonstrates modern AI integration, streaming architecture, and product differentiation.
+
+**Key technical aspects:**
+- Server-Sent Events (SSE) for real-time streaming
+- Gemini API integration with rate limiting
+- Prompt engineering for consistent, engaging output
+- Caching layer to stay within free tier limits
+
+```typescript
+// apps/web/src/hooks/useStreamingReport.ts
+export function useStreamingReport(gameId: number) {
+  const [report, setReport] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  const startStream = async () => {
+    setIsStreaming(true);
+    setReport("");
+
+    const eventSource = new EventSource(
+      `/api/v1/reports/game/${gameId}/preview`
+    );
+
+    eventSource.onmessage = (event) => {
+      if (event.data === "[DONE]") {
+        eventSource.close();
+        setIsStreaming(false);
+      } else {
+        setReport(prev => prev + event.data);
+      }
+    };
+  };
+
+  return { report, isStreaming, startStream };
+}
+```
+
+---
+
+### 3. MLflow Model Registry with Experiment Tracking
+
+**Why it matters:** Production ML maturity—experiment tracking, model versioning, and reproducibility.
 
 ```python
-# scripts/train_models.py
+# scripts/train_game_predictor.py
 import mlflow
 from mlflow.tracking import MlflowClient
 
-def train_and_register(X_train, y_train, X_test, y_test):
-    mlflow.set_experiment("clutch-impact-simulator")
+def train_and_register():
+    mlflow.set_experiment("game-winner-prediction")
 
     with mlflow.start_run():
-        # Train model
-        model = train_xgboost(X_train, y_train)
+        # Log parameters
+        mlflow.log_params({
+            "model_type": "xgboost",
+            "n_estimators": 200,
+            "max_depth": 6,
+            "training_seasons": "2022-2025",
+        })
+
+        # Train
+        model = train_model(X_train, y_train)
 
         # Log metrics
         metrics = evaluate_model(model, X_test, y_test)
-        mlflow.log_metrics(metrics)
+        mlflow.log_metrics({
+            "accuracy": metrics["accuracy"],
+            "auc_roc": metrics["auc_roc"],
+            "brier_score": metrics["brier_score"],
+        })
 
         # Log model with signature
-        signature = mlflow.models.infer_signature(X_train, model.predict(X_train))
+        signature = mlflow.models.infer_signature(X_test, model.predict(X_test))
         mlflow.xgboost.log_model(
             model,
-            "clutch_model",
+            "game_predictor",
             signature=signature,
-            registered_model_name="ClutchImpactPredictor"
+            registered_model_name="NBAGamePredictor"
         )
-
-        # Promote to staging/production based on metrics
-        client = MlflowClient()
-        if metrics['rmse'] < PRODUCTION_THRESHOLD:
-            client.transition_model_version_stage(
-                name="ClutchImpactPredictor",
-                version=latest_version,
-                stage="Production"
-            )
 ```
-
-**API integration:** FastAPI endpoint loads model by stage (`Production` vs `Staging`) enabling shadow deployments.
 
 ---
 
-### 3. Containerized ML Pipeline with Multi-Stage Docker
+### 4. Admin Dashboard for Model Monitoring
 
-**Why it matters:** DevOps/MLOps recruiters specifically look for production deployment patterns.
+**Why it matters:** Shows production thinking—models need monitoring, not just deployment.
 
-```dockerfile
-# infrastructure/docker/Dockerfile.ml
-# Stage 1: Build environment
-FROM python:3.12-slim AS builder
+**Dashboard components:**
+- **Model Metrics:** Accuracy over time, prediction distribution
+- **Data Pipeline Health:** Last successful fetch, cache hit rates
+- **Data Freshness:** Age of latest player stats, upcoming games loaded
 
-WORKDIR /app
-RUN pip install uv
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+```typescript
+// apps/web/src/components/Admin/ModelMetrics.tsx
+const ModelMetrics = () => {
+  const { data } = useQuery("modelMetrics", fetchModelMetrics);
 
-# Stage 2: Runtime (minimal attack surface)
-FROM python:3.12-slim AS runtime
-
-# Non-root user for security
-RUN useradd -m -u 1000 mluser
-USER mluser
-
-WORKDIR /app
-COPY --from=builder /app/.venv /app/.venv
-COPY packages/ ./packages/
-
-ENV PATH="/app/.venv/bin:$PATH"
-ENV MLFLOW_TRACKING_URI="http://mlflow:5000"
-
-HEALTHCHECK --interval=30s --timeout=3s \
-    CMD python -c "import packages.impact_simulator" || exit 1
-
-ENTRYPOINT ["python", "-m", "uvicorn", "packages.api.src.main:app"]
-CMD ["--host", "0.0.0.0", "--port", "8000"]
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      <MetricCard
+        title="7-Day Accuracy"
+        value={`${data.accuracy_7d}%`}
+        trend={data.accuracy_trend}
+      />
+      <MetricCard
+        title="Predictions Today"
+        value={data.predictions_today}
+      />
+      <MetricCard
+        title="Model Version"
+        value={data.model_version}
+      />
+    </div>
+  );
+};
 ```
+
+---
+
+### 5. Containerized Development with Docker Compose
 
 ```yaml
 # infrastructure/docker/docker-compose.yml
@@ -567,141 +982,254 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - DATABASE_URL=postgresql://user:pass@db:5432/sports_hub
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
+      - db
       - mlflow
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=sports_hub
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
 
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.10.0
     ports:
       - "5000:5000"
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root ./mlflow/artifacts
     volumes:
       - ../../mlflow:/mlflow
-    command: mlflow server --host 0.0.0.0 --backend-store-uri sqlite:///mlflow/mlflow.db
 
   web:
     build:
       context: ../../apps/web
     ports:
       - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000
     depends_on:
       - api
-```
 
----
-
-### Bonus: CI/CD Pipeline Snippet
-
-```yaml
-# .github/workflows/ml-pipeline.yml
-name: ML Pipeline
-
-on:
-  push:
-    paths:
-      - 'packages/impact-simulator/**'
-
-jobs:
-  train-and-evaluate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Train model
-        run: |
-          uv run python scripts/train_models.py
-
-      - name: Model quality gate
-        run: |
-          uv run pytest packages/impact-simulator/tests/test_model_quality.py
-
-      - name: Push to registry (if quality passes)
-        if: success()
-        run: |
-          uv run python scripts/promote_model.py --stage staging
+volumes:
+  postgres_data:
 ```
 
 </Recruiter_Focus>
 
 ---
 
-<Next_Action>
+<Testing_Strategy>
 
-## First Technical Test: NBA Auction Optimizer Proof-of-Concept
+## Unit & Integration Testing Approach
+
+Testing will be done at each checkpoint before moving to the next phase.
+
+### Unit Tests (pytest)
 
 ```python
-# scripts/poc_auction_optimizer.py
-"""
-POC: NBA Fantasy Auction Draft Optimizer
-Run: python scripts/poc_auction_optimizer.py
-"""
-from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpStatus
+# packages/draft-optimizer/tests/test_optimizer.py
+import pytest
+from src.models.auction_lp import AuctionOptimizer
 
-# Sample NBA player pool (projected_points, auction_cost)
-players = [
-    {"id": "tatum", "name": "Jayson Tatum", "pos": "SF", "pts": 45.2, "cost": 62},
-    {"id": "jokic", "name": "Nikola Jokic", "pos": "C", "pts": 58.1, "cost": 78},
-    {"id": "brunson", "name": "Jalen Brunson", "pos": "PG", "pts": 38.5, "cost": 45},
-    {"id": "ant", "name": "Anthony Edwards", "pos": "SG", "pts": 42.0, "cost": 55},
-    {"id": "sabonis", "name": "Domantas Sabonis", "pos": "C", "pts": 44.8, "cost": 48},
-    {"id": "maxey", "name": "Tyrese Maxey", "pos": "PG", "pts": 35.2, "cost": 38},
-    {"id": "bam", "name": "Bam Adebayo", "pos": "C", "pts": 36.5, "cost": 40},
-    {"id": "scottie", "name": "Scottie Barnes", "pos": "SF", "pts": 34.0, "cost": 35},
-]
+class TestAuctionOptimizer:
+    @pytest.fixture
+    def sample_players(self):
+        return [
+            {"id": "p1", "name": "Player 1", "position": "PG",
+             "projected_points": 40.0, "auction_value": 50},
+            {"id": "p2", "name": "Player 2", "position": "SG",
+             "projected_points": 35.0, "auction_value": 40},
+            # ... more players
+        ]
 
-# Optimization problem
-prob = LpProblem("NBA_Auction_Draft", LpMaximize)
-x = {p["id"]: LpVariable(f"x_{p['id']}", cat="Binary") for p in players}
+    def test_budget_constraint_respected(self, sample_players):
+        optimizer = AuctionOptimizer(sample_players)
+        result = optimizer.solve()
 
-# Objective: maximize total projected fantasy points
-prob += lpSum(p["pts"] * x[p["id"]] for p in players), "Total_Points"
+        assert result["total_cost"] <= 200, "Budget exceeded"
 
-# Constraints
-prob += lpSum(p["cost"] * x[p["id"]] for p in players) <= 200, "Budget"
-prob += lpSum(x[p["id"]] for p in players) == 5, "Roster_Size"
+    def test_roster_size_correct(self, sample_players):
+        optimizer = AuctionOptimizer(sample_players)
+        result = optimizer.solve()
 
-# Solve and display results
-prob.solve()
-print(f"Status: {LpStatus[prob.status]} | Optimal Points: {prob.objective.value():.1f}")
-print("Selected:", [p["name"] for p in players if x[p["id"]].value() == 1])
+        assert len(result["roster"]) == 10, "Wrong roster size"
+
+    def test_position_minimums_met(self, sample_players):
+        optimizer = AuctionOptimizer(sample_players)
+        result = optimizer.solve()
+
+        positions = [p["position"] for p in result["roster"]]
+        assert positions.count("PG") >= 1, "No PG selected"
+        assert positions.count("C") >= 1, "No C selected"
 ```
 
-**Expected output:**
+### Integration Tests (API Endpoints)
+
+```python
+# packages/api/tests/test_predictions.py
+import pytest
+from fastapi.testclient import TestClient
+from src.main import app
+
+client = TestClient(app)
+
+class TestPredictionsAPI:
+    def test_get_prediction_returns_valid_structure(self):
+        response = client.get("/api/v1/predictions/game/123")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "predicted_winner" in data
+        assert "win_probability" in data
+        assert 0 <= data["win_probability"] <= 1
+
+    def test_shap_values_included(self):
+        response = client.get("/api/v1/predictions/game/123?include_shap=true")
+
+        data = response.json()
+        assert "shap_values" in data
+        assert isinstance(data["shap_values"], dict)
 ```
-Status: Optimal | Optimal Points: 194.5
-Selected: ['Nikola Jokic', 'Jalen Brunson', 'Domantas Sabonis', 'Tyrese Maxey', 'Scottie Barnes']
+
+### Model Quality Tests
+
+```python
+# packages/game-predictor/tests/test_model_quality.py
+import pytest
+from sklearn.metrics import accuracy_score, roc_auc_score
+
+class TestModelQuality:
+    """Run as part of CI to prevent model regression"""
+
+    ACCURACY_THRESHOLD = 0.63
+    AUC_THRESHOLD = 0.68
+
+    def test_accuracy_above_threshold(self, trained_model, test_data):
+        X_test, y_test = test_data
+        y_pred = trained_model.predict(X_test)
+
+        accuracy = accuracy_score(y_test, y_pred)
+        assert accuracy >= self.ACCURACY_THRESHOLD, \
+            f"Accuracy {accuracy:.3f} below threshold {self.ACCURACY_THRESHOLD}"
+
+    def test_auc_above_threshold(self, trained_model, test_data):
+        X_test, y_test = test_data
+        y_proba = trained_model.predict_proba(X_test)[:, 1]
+
+        auc = roc_auc_score(y_test, y_proba)
+        assert auc >= self.AUC_THRESHOLD, \
+            f"AUC {auc:.3f} below threshold {self.AUC_THRESHOLD}"
 ```
 
-### Validation Steps
+</Testing_Strategy>
 
-1. **Run the script:** `python scripts/poc_auction_optimizer.py`
-2. **Verify constraint satisfaction:** Total cost ≤ 200, exactly 5 players selected
-3. **Extend test:** Add position constraints (min 1 PG, min 1 C, etc.)
+---
 
-</Next_Action>
+<Cost_Analysis>
+
+## Free Tier Usage Plan
+
+| Service | Free Tier Limits | Our Usage | Status |
+|---------|------------------|-----------|--------|
+| **Gemini 1.5 Flash** | 15 RPM, 1,500 req/day | ~50 reports/day max | ✅ Safe |
+| **Vercel** | 100GB bandwidth, serverless | Frontend hosting | ✅ Safe |
+| **PostgreSQL (local)** | Unlimited (Docker) | Development | ✅ Free |
+| **Supabase (optional)** | 500MB, 2GB transfer | If cloud DB needed | ✅ Safe |
+| **GitHub Actions** | 2,000 min/month | CI/CD | ✅ Safe |
+| **MLflow** | Self-hosted | Local Docker | ✅ Free |
+
+### Cost Mitigation Strategies
+
+1. **Aggressive Caching:** Cache NBA API responses for 24h, Gemini reports for 12h
+2. **Rate Limiting:** Enforce 1 req/sec to NBA API, queue Gemini requests
+3. **Local Development:** Docker Compose for PostgreSQL, MLflow—no cloud costs
+4. **Lazy Generation:** Only generate scouting reports on user request, not pre-computed
+
+</Cost_Analysis>
 
 ---
 
 ## Implementation Roadmap
 
-| Week | Milestone | Deliverables |
-|------|-----------|--------------|
-| **1** | Data Foundation | Unified schemas, data pipeline, raw data collection |
-| **2** | Draft Optimizer MVP | LP solver, FastAPI endpoint, basic UI |
-| **3** | Impact Simulator MVP | Feature engineering, XGBoost training, SHAP integration |
-| **4** | Integration & Polish | Dashboard toggle, MLflow setup, Docker compose |
-| **5** | Demo Prep | Documentation, investor deck, recorded demo |
+### Phase 1: Foundation (Weeks 1-2)
+- [ ] Set up monorepo structure with uv
+- [ ] Implement NBA data fetching with caching
+- [ ] Create PostgreSQL schema and models
+- [ ] Build basic FastAPI skeleton with health checks
+- [ ] Write unit tests for data layer
+
+### Phase 2: Draft Optimizer (Weeks 3-4)
+- [ ] Feature engineering for player projections
+- [ ] Train XGBoost projection model
+- [ ] Implement PuLP optimization solver
+- [ ] Build draft optimizer API endpoints
+- [ ] Create basic React UI for draft tool
+- [ ] Integration tests for optimizer flow
+
+### Phase 3: Game Predictor (Weeks 5-7)
+- [ ] Feature engineering for game prediction
+- [ ] Train XGBoost classifier with Optuna tuning
+- [ ] Implement SHAP explainer (dual mode)
+- [ ] MLflow experiment tracking setup
+- [ ] Build prediction API endpoints
+- [ ] Create React UI with SHAP visualizations
+- [ ] Model quality tests in CI
+
+### Phase 4: LLM Integration (Weeks 8-9)
+- [ ] Gemini API integration with streaming
+- [ ] Prompt engineering for scouting reports
+- [ ] SSE streaming endpoint
+- [ ] React streaming text component
+- [ ] Caching layer for reports
+
+### Phase 5: Auth & Polish (Weeks 10-11)
+- [ ] OAuth implementation (Google/GitHub)
+- [ ] Admin dashboard components
+- [ ] Mobile responsive styling
+- [ ] Docker Compose production setup
+- [ ] End-to-end testing
+
+### Phase 6: Demo Prep (Week 12+)
+- [ ] AWS deployment (learning)
+- [ ] Documentation and README
+- [ ] Demo script and recording
+- [ ] Performance optimization
 
 ---
 
-## Success Criteria for Investor Demo
+## Success Criteria
 
-- [ ] Sub-second optimization results for 300+ player pools
-- [ ] Clutch predictions with RMSE < 5.0 on holdout set
+- [ ] Draft optimizer returns results in < 500ms for 300 players
+- [ ] Game prediction accuracy > 65% on holdout set
 - [ ] SHAP explanations render in < 200ms
+- [ ] Scouting reports stream with visible typing effect
 - [ ] Full Docker-compose deployment in single command
-- [ ] Clean CI pipeline with model quality gates
+- [ ] All unit and integration tests passing
+- [ ] Mobile-responsive UI
+- [ ] OAuth login working
 
 ---
 
-*This document serves as the technical specification for the Sports Intelligence Hub MVP. All architectural decisions prioritize demonstrable ML engineering competency while maintaining a realistic scope for a portfolio project.*
+## Future Enhancements (Post-MVP)
+
+1. **Live Game Tracking:** Real-time score updates and in-game predictions
+2. **Social Features:** Share predictions, leaderboards, follow other users
+3. **Betting Odds Integration:** Compare model predictions to Vegas lines
+4. **NFL Expansion:** Apply same architecture to NFL data
+5. **Push Notifications:** Alerts for games, injury updates
+
+---
+
+*This document reflects requirements gathered through stakeholder interview on 2026-02-02. All decisions prioritize learning, recruiter appeal, and zero/minimal cost.*
