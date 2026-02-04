@@ -6,29 +6,58 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Sports Intelligence Hub - an ML platform for NBA game predictions and fantasy draft optimization. Built as a recruiter demo showcasing end-to-end ML engineering. See `prd.md` for full requirements.
 
-**Key Technologies:** Python 3.11+, FastAPI, PostgreSQL, SQLAlchemy, PuLP (LP optimization), XGBoost, uv (package manager)
+**Key Technologies:** Python 3.11+, FastAPI, PostgreSQL, SQLAlchemy, PuLP (LP optimization), XGBoost, MLflow, React, uv (package manager)
 
-**Monorepo Structure:** Three packages in `packages/` - `core` (shared), `api` (FastAPI), `draft-optimizer` (ML + optimization)
+**Monorepo Structure:** Three packages in `packages/` + React frontend in `apps/web/`
 
-## Current Status: Phase 2 In Progress 🔧
+## Current Status: Draft Room UI/UX Improvements Complete ✅
 
-**Phase 1 Complete:**
-- Monorepo structure with `uv` workspaces
-- PostgreSQL + MLflow via Docker Compose
-- Database models (`Player`, `Game`, `PlayerGameStats`, `GamePrediction`)
-- NBA data loader with caching (fetches from nba_api)
-- FastAPI with health + readiness endpoints
+**Completed Features:**
+- ✅ Real NBA API integration (free, via `nba_api` library)
+- ✅ Auction value calculation with age, games played, and volume adjustments
+- ✅ XGBoost projection model trained on 3 seasons of real data
+- ✅ Draft Room API with real player data (correct teams, realistic values)
+- ✅ Category-Aware Recommendations with filters and scoring modes
+- ✅ Search Typeahead with 300ms debounce and request cancellation
+- ✅ Taken Players Panel
+- ✅ Expandable player stats (9-cat grid)
+- ✅ Skip button for recommendations
+- ✅ 36 optimizer tests passing
 
-**Phase 2 Progress (Draft Optimizer):**
-- ✅ Package structure (`packages/draft-optimizer/`)
-- ✅ 9-category fantasy scoring system
-- ✅ PuLP optimization solver (13 roster, $200 budget, custom configs)
-- ✅ Draft optimizer API endpoints
-- ✅ 33 tests passing
-- ⏳ XGBoost projection model (using mock projections for now)
-- ⏳ React UI for draft tool
+**Most Recent Session (2026-02-03) - Draft Room UI/UX Improvements:**
 
-**Next:** Train XGBoost model on real NBA data, then build React UI
+1. **Stable Prices (Issue 3)**: Use original `player.auction_value` instead of recalculating. Giannis now shows ~$74 even after drafting other stars.
+
+2. **Show Player Stats (Issue 1)**: Added expandable 9-stat grid to recommendation cards. Click "Show Stats" to see PPG, RPG, APG, SPG, BPG, TOV, FG%, FT%, 3PM.
+
+3. **Taken Players Panel (Issue 4)**: New collapsible panel in left column showing all players marked as taken by other teams.
+
+4. **Fixed Category Strength Analysis (Issue 2)**: League averages now scale by roster progress. With 2/13 slots filled, scaled_mean = full_mean * (2/13), scaled_std = full_std * sqrt(2/13). Jokic + Wemby now shows as STRONG in PPG/RPG instead of weak.
+
+5. **Improved Reinforce Recommendations (Issue 5)**: Fixed algorithm so reinforce tab actually shows players:
+   - Changed early draft threshold from `roster_size <= 2` to `roster_size == 0`
+   - Now creates TWO recs per player (one fill_gap, one reinforce)
+   - Equal weighting (100 pts each) instead of half-weight for reinforce
+   - Loosened "excels in" threshold from top 25% to top 30%
+
+6. **Added Filters & Scoring Modes**:
+   - Position filter (All/PG/SG/SF/PF/C)
+   - Cost range (min/max auction value)
+   - FPTS range (min/max projected fantasy points)
+   - Affordability checkboxes (Affordable/Stretch)
+   - Scoring mode toggle: Balanced/Value/Production
+
+7. **Skip Button**: Click X on recommendation to hide player for this session. "Clear N skipped" button to restore.
+
+8. **FPTS/$ Display**: Each recommendation card now shows FPTS per dollar efficiency.
+
+**IMPORTANT - Stats are CURRENT SEASON ACTUALS:**
+The stats shown (PPG, RPG, etc.) are from the 2024-25 NBA season via NBA API, NOT XGBoost projections. The XGBoost model exists but isn't wired up yet for next-season predictions.
+
+**Next Steps:**
+- Wire up XGBoost projector to show predicted next-season stats
+- Game predictor feature
+- LLM integration for scouting reports
 
 ## Commands
 
@@ -36,15 +65,22 @@ Sports Intelligence Hub - an ML platform for NBA game predictions and fantasy dr
 # First time setup
 make install              # Install all dependencies (creates .venv)
 make docker-up            # Start PostgreSQL + MLflow
+brew install libomp       # Required for XGBoost on macOS
 
 # Development
 make dev                  # Run API at localhost:8000
-make test                 # Run all tests (33 tests)
+make test                 # Run all tests
 make lint                 # Run ruff + mypy
+
+# Web app
+cd apps/web && npm install
+cd apps/web && npm run dev   # Run React app at localhost:3000
+
+# Data ingestion (fetch real NBA stats)
+uv run python -m core.cli.ingest_data --seasons 2024-25
 
 # Docker
 make docker-down          # Stop containers
-docker logs sports_hub_db # Check PostgreSQL logs
 ```
 
 ## Development Workflow
@@ -52,240 +88,213 @@ docker logs sports_hub_db # Check PostgreSQL logs
 **IMPORTANT: Always run `make lint` after making code changes.**
 
 ```bash
-# After any code changes:
 make lint                 # Must pass before committing
 make test                 # Verify tests still pass
+cd apps/web && npm run build  # Check TypeScript compiles
 ```
-
-The linter runs:
-- **ruff**: Fast Python linter (import sorting, unused imports, code style)
-- **mypy**: Static type checking (strict mode enabled)
-
-## Docker Services
-
-```bash
-# Start services
-docker compose -f infrastructure/docker/docker-compose.yml up -d
-
-# Services:
-# - PostgreSQL: localhost:5432 (user/pass/sports_hub)
-# - MLflow UI: localhost:5001
-```
-
-**Database URL:** `postgresql://user:pass@localhost:5432/sports_hub`
 
 ## Project Structure
 
 ```
 sports-intelligence-hub/
-├── pyproject.toml              # Root workspace config (uv)
-├── .env                        # Environment variables (DATABASE_URL, etc.)
-├── Makefile                    # Dev commands
 ├── packages/
 │   ├── core/                   # Shared library
-│   │   ├── core/
-│   │   │   ├── schemas/        # Pydantic models (PlayerSchema, GameSchema)
-│   │   │   ├── db/             # SQLAlchemy models + connection
-│   │   │   │   ├── models.py   # Player, Game, PlayerGameStats, GamePrediction
-│   │   │   │   └── connection.py
-│   │   │   └── utils/
-│   │   │       └── data_loader.py  # NBADataLoader (fetches from nba_api)
-│   │   └── tests/
-│   ├── draft-optimizer/        # Fantasy draft optimization
-│   │   ├── draft_optimizer/
-│   │   │   ├── schemas.py      # RosterConfig, PlayerProjection, RosterSlot
-│   │   │   ├── features.py     # 9-cat fantasy scoring, auction values
-│   │   │   ├── optimizer.py    # PuLP LP solver
-│   │   │   └── mock_data.py    # Test data generation
-│   │   └── tests/
-│   └── api/                    # FastAPI backend
-│       ├── api/
-│       │   ├── main.py         # App factory, loads .env
-│       │   └── routers/
-│       │       ├── health.py   # /api/v1/health, /api/v1/health/ready
-│       │       └── draft.py    # /api/v1/draft/* endpoints
-│       └── tests/
-├── infrastructure/docker/
-│   └── docker-compose.yml      # PostgreSQL + MLflow
-└── data/cache/                 # NBA API response cache (gitignored)
+│   │   └── core/services/player_stats_service.py  # NBA data fetching
+│   ├── draft-optimizer/        # Fantasy draft optimization + ML
+│   │   └── draft_optimizer/
+│   │       ├── schemas.py      # CategoryAwareRecommendation (includes 9 stat fields)
+│   │       ├── features.py     # Fantasy scoring, auction values
+│   │       ├── draft_room.py   # DraftState + get_category_aware_recommendations()
+│   │       ├── real_data.py    # Load real NBA players from API
+│   │       └── ml/projector.py # XGBoost (not yet wired to draft room)
+│   └── api/
+│       └── api/routers/draft_room.py  # API endpoints with filter params
+├── apps/web/
+│   └── src/
+│       ├── pages/DraftRoom.tsx           # Main page, manages filter/skip state
+│       ├── components/draft-room/
+│       │   ├── RecommendationsPanel.tsx  # Filters, scoring mode, skip, stats grid
+│       │   ├── TakenPlayersPanel.tsx     # NEW: collapsible taken players list
+│       │   ├── PlayerSearch.tsx
+│       │   ├── MyRoster.tsx
+│       │   └── BudgetTracker.tsx
+│       └── lib/
+│           ├── api.ts      # getCategoryRecommendations() with filter params
+│           └── types.ts    # CategoryAwareRecommendation (includes 9 stats)
+└── models/player_projector/  # Trained XGBoost model
 ```
 
 ## API Endpoints
 
-```
-# Health
-GET  /api/v1/health              → {"status": "healthy"}
-GET  /api/v1/health/ready        → {"status": "ready", "checks": {"database": "healthy"}}
-
-# Draft Optimizer
-POST /api/v1/draft/optimize      → Optimize roster (accepts players, config, exclusions)
-GET  /api/v1/draft/config/default → Default roster config (13 roster, $200)
-GET  /api/v1/draft/config/slots  → Slot eligibility (PG, SG, G, etc.)
-POST /api/v1/draft/mock-players  → Generate mock player pool
-```
-
-### Draft Optimizer Usage
+### Category Recommendations (with filters)
 
 ```bash
-# With mock data
-curl -X POST http://localhost:8000/api/v1/draft/optimize \
-  -H "Content-Type: application/json" \
-  -d '{"use_mock_data": true}'
-
-# With custom config (2 centers instead of 1C + 3UTIL)
-curl -X POST http://localhost:8000/api/v1/draft/optimize \
-  -H "Content-Type: application/json" \
-  -d '{
-    "use_mock_data": true,
-    "config": {
-      "slots": ["PG","SG","G","SF","PF","F","C","C","UTIL","UTIL","BENCH","BENCH","BENCH"],
-      "budget": 200
-    }
-  }'
+GET /api/v1/draft-room/session/{id}/category-recommendations
+  ?top_n=10
+  &position=PG                    # Filter by position
+  &scoring_mode=balanced          # balanced | value | production
+  &min_cost=5                     # Min auction value
+  &max_cost=50                    # Max auction value
+  &min_fpts=20                    # Min projected FPTS
+  &max_fpts=60                    # Max projected FPTS
+  &affordability=affordable,stretch  # Comma-separated tags
+  &skipped_ids=nba_123,nba_456   # Comma-separated player IDs to exclude
 ```
 
-## Why uv Instead of pip/poetry?
+**Scoring Modes:**
+- `balanced`: 25% category fit, 25% FPTS, 25% value, 25% FPTS/dollar
+- `value`: 20% fit, 20% FPTS, 20% value, 40% FPTS/dollar
+- `production`: 20% fit, 40% FPTS, 20% value, 20% FPTS/dollar
 
-1. **Speed**: 10-100x faster than pip
-2. **Monorepo support**: Native workspace for multiple packages
-3. **No manual venv**: `uv sync` creates `.venv`, `uv run <cmd>` uses it automatically
-4. **Lockfile**: `uv.lock` for reproducible builds
+### Draft State (includes taken players)
 
 ```bash
-# uv workflow (no activate needed)
-uv sync --all-packages      # Install everything
-uv run pytest -v            # Run in .venv automatically
-uv run python script.py     # Same
+GET /api/v1/draft-room/session/{id}/state
+
+# Response includes:
+{
+  "my_roster": [...],
+  "taken_players": [           # NEW
+    {"player_id": "nba_123", "name": "...", "team": "...", "position": "...", "projected_fpts": 45.2, "auction_value": 60}
+  ],
+  ...
+}
 ```
 
-## Workspace Dependencies
+## Key Implementation Details
 
-When one package depends on another, declare in `pyproject.toml`:
+### Category-Aware Recommendations Algorithm (draft_room.py)
 
-```toml
-# packages/api/pyproject.toml
-[project]
-dependencies = ["core"]
+**Roster Strength with Scaling:**
+```python
+# League averages scale by roster progress
+filled_slots = len(my_roster)
+if filled_slots > 0:
+    scaled_mean = full_mean * (filled_slots / roster_size)
+    scaled_std = full_std * math.sqrt(filled_slots / roster_size)
 
-[tool.uv.sources]
-core = { workspace = true }  # Local workspace package
+# Z-score calculation
+z_score = (team_total - scaled_mean) / scaled_std
+# > 1.0 = strong, < -1.0 = weak, else average
 ```
 
-## VSCode Setup
-
-If VSCode shows import errors: `Cmd+Shift+P` → "Python: Select Interpreter" → `.venv/bin/python`
-
-The `.vscode/settings.json` should auto-configure this.
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Package Manager | uv |
-| API | FastAPI + uvicorn |
-| Database | PostgreSQL 16 (Docker) |
-| ORM | SQLAlchemy 2.0 |
-| Data Source | nba_api |
-| ML (planned) | XGBoost, scikit-learn, SHAP |
-| Experiment Tracking | MLflow |
-| LLM (planned) | Gemini API |
-
-## Implementation Phases
-
-### Phase 1: Foundation ✅ COMPLETE
-- [x] Monorepo structure with uv
-- [x] PostgreSQL + MLflow Docker setup
-- [x] Database models (Player, Game, etc.)
-- [x] NBA data fetching with caching
-- [x] FastAPI skeleton with health checks
-- [x] Unit tests for data layer
-
-### Phase 2: Draft Optimizer ← IN PROGRESS
-- [x] Feature engineering for player projections (`packages/draft-optimizer/`)
-- [ ] Train XGBoost projection model (using mock data for now)
-- [x] Implement PuLP optimization solver (roster selection)
-- [x] Build draft optimizer API endpoints
-- [ ] Create basic React UI for draft tool
-
-### Phase 3: Game Predictor
-- [ ] Feature engineering for game prediction
-- [ ] Train XGBoost classifier
-- [ ] SHAP explainability (dual mode: technical + human-readable)
-- [ ] MLflow experiment tracking
-- [ ] Prediction API endpoints
-
-### Phase 4: LLM Integration
-- [ ] Gemini API streaming integration
-- [ ] Scouting report prompts
-- [ ] SSE streaming endpoint
-
-### Phase 5: Auth & Polish
-- [ ] OAuth (Google/GitHub)
-- [ ] Admin dashboard
-- [ ] Docker production setup
-
-## Testing
-
-```bash
-make test  # Runs 33 tests
-
-# Test breakdown:
-# - packages/api/tests/test_health.py (2 tests) - API endpoints
-# - packages/core/tests/test_schemas.py (4 tests) - Pydantic schemas
-# - packages/core/tests/test_db.py (5 tests) - Database operations
-# - packages/draft-optimizer/tests/test_optimizer.py (22 tests) - Draft optimizer
+**Player Classification (creates BOTH recs per player):**
+```python
+def _calculate_player_category_fit(player, roster_analysis):
+    # Returns: (gap_score, reinforce_score, gap_cats, reinforce_cats)
+    # Player excels if in top 30% for a category
+    # Both fill_gap AND reinforce recs created for each player
+    # Each list sorted by its respective composite score
 ```
 
-## Key Files to Know
-
-| File | Purpose |
-|------|---------|
-| `prd.md` | Full product requirements document |
-| `packages/core/core/utils/data_loader.py` | NBA API fetching with cache |
-| `packages/core/core/db/models.py` | SQLAlchemy ORM models |
-| `packages/api/api/main.py` | FastAPI app factory |
-| `packages/api/api/routers/draft.py` | Draft optimizer API endpoints |
-| `packages/draft-optimizer/draft_optimizer/optimizer.py` | PuLP LP solver |
-| `packages/draft-optimizer/draft_optimizer/features.py` | Fantasy scoring (9-cat) |
-| `packages/draft-optimizer/draft_optimizer/schemas.py` | Roster config, player projections |
-| `infrastructure/docker/docker-compose.yml` | PostgreSQL + MLflow |
-
-## Draft Optimizer Design
-
-The draft optimizer uses **Linear Programming (PuLP)** to maximize fantasy points within constraints.
-
-### Fantasy Rules (User-Specified)
-- **Roster Size:** 13 players (10 starters + 3 bench)
-- **Budget:** $200 auction
-- **Starting Lineup:** PG, SG, G (PG/SG), SF, PF, F (SF/PF), C, 3×UTIL
-- **Custom configs supported** (e.g., 2 centers instead of 1C + 3UTIL)
-
-### 9-Category Scoring
-```
-Fantasy Points = points×1.0 + rebounds×1.2 + assists×1.5
-               + steals×3.0 + blocks×3.0 - turnovers×1.0
-               + three_made×0.5 + FG%_bonus + FT%_bonus
+**Composite Scoring:**
+```python
+composite = (
+    category_fit_score * w["fit"]        # How well fits roster needs
+    + fpts_norm * w["fpts"]              # Raw production
+    + value_norm * w["value"]            # Auction value (valuable = good)
+    + fpts_per_dollar_norm * w["fpts_per_dollar"]  # Efficiency
+)
 ```
 
-### LP Formulation
-- **Objective:** Maximize Σ(projected_fpts × x[player, slot])
-- **Constraints:**
-  - Each slot filled exactly once
-  - Each player used at most once (across all slots)
-  - Position eligibility (PG can't fill C slot)
-  - Budget ≤ $200
-  - Locked players must be selected
+**Early Draft Mode:**
+- Only triggers with `roster_size == 0` (empty roster)
+- Shows best FPTS players regardless of category fit
+- Once ANY player drafted, full category analysis kicks in
 
-### Current State
-- Using **mock player data** for testing (realistic NBA archetypes)
-- **Next:** Train XGBoost model on real NBA stats for actual projections
+### CategoryAwareRecommendation Schema
+
+```python
+# packages/draft-optimizer/draft_optimizer/schemas.py
+class CategoryAwareRecommendation(BaseModel):
+    player_id: str
+    name: str
+    team: str
+    position: str
+    projected_fpts: float
+    auction_value: float
+    suggested_max_bid: float
+    fills_slot: str
+    priority_rank: int
+    strategy: Literal["fill_gap", "reinforce_strength"]
+    target_categories: list[str]
+    affordability: AffordabilityTag
+    category_fit_score: float
+    # 9 individual stats (NEW)
+    points: float
+    rebounds: float
+    assists: float
+    steals: float
+    blocks: float
+    turnovers: float
+    fg_pct: float
+    ft_pct: float
+    three_made: float
+```
+
+### Frontend State Management (DraftRoom.tsx)
+
+```typescript
+// Filter state
+const [filters, setFilters] = useState<RecommendationFilters>({
+  scoringMode: 'balanced',
+  affordability: [],
+});
+
+// Skip state (session-only, clears on refresh)
+const [skippedPlayerIds, setSkippedPlayerIds] = useState<Set<string>>(new Set());
+
+// All passed to getCategoryRecommendations() API call
+```
+
+### TakenPlayersPanel Component
+
+```typescript
+// apps/web/src/components/draft-room/TakenPlayersPanel.tsx
+// Collapsible panel showing players marked as taken
+// Table with: Name, Team, Position, FPTS, Value
+// Max-height with scroll for long lists
+```
+
+## Testing Verification
+
+After changes, verify:
+1. `make lint` passes
+2. `make test` passes (36 optimizer tests)
+3. `cd apps/web && npm run build` compiles
+
+Manual testing:
+1. Start API: `make dev`
+2. Start web: `cd apps/web && npm run dev`
+3. Create new draft session
+4. Draft Jokic (~$75)
+5. Verify:
+   - Category strength bar shows reasonable strengths
+   - **Fill Gaps** tab shows valuable players (not just $1 specialists)
+   - **Reinforce** tab now shows players (was always empty before)
+   - Click "Show Stats" → see 9-stat grid
+   - Mark a player as "Taken" → see in Taken Players panel
+   - Try filters (position, cost range, etc.)
+   - Skip a player → disappears, "Clear N skipped" appears
 
 ## Common Issues
 
-**"No module named X"**: Run `make install` or `uv sync --all-packages`
+**Reinforce tab always empty:** Fixed. Was using `roster_size <= 2` threshold. Now uses `== 0`.
 
-**VSCode red squiggles**: Select correct interpreter (`.venv/bin/python`)
+**Fill Gaps showing $1 players:** Fixed. Now uses composite scoring that balances category fit with FPTS, value, and efficiency.
 
-**Port 5000 in use (macOS)**: MLflow uses 5001 instead (AirPlay uses 5000)
+**Category strengths all "weak" early draft:** Fixed. League averages now scale by roster progress.
 
-**Database not connecting**: Run `make docker-up` first
+**Stats not showing:** Make sure CategoryAwareRecommendation includes the 9 stat fields in schemas.py, draft_room.py router, and types.ts.
+
+## Future Work
+
+1. **Wire up XGBoost projections** - Show predicted next-season stats instead of current season actuals
+
+2. **Volume stats** - Add total stats (not just per-game) to better evaluate player impact
+
+3. **Persist draft sessions** - Currently in-memory only
+
+4. **Game predictor** - Use XGBoost classifier for game outcomes
+
+5. **LLM scouting reports** - Integrate Gemini API

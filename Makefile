@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format clean api
+.PHONY: install dev test lint format clean api web-install web-dev
 
 # Install dependencies
 install:
@@ -41,3 +41,11 @@ docker-up:
 # Stop Docker services
 docker-down:
 	docker compose -f infrastructure/docker/docker-compose.yml down
+
+# Install web dependencies
+web-install:
+	cd apps/web && npm install
+
+# Run web development server
+web-dev:
+	cd apps/web && npm run dev

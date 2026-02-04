@@ -59,3 +59,12 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite/React build output
+apps/web/dist/

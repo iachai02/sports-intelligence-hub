@@ -1,8 +1,82 @@
 """Pydantic schemas for draft optimizer."""
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+# 9-Category Fantasy Stats
+CATEGORY_NAMES = ["PPG", "RPG", "APG", "SPG", "BPG", "TOV", "FG%", "FT%", "3PM"]
+
+
+class CategoryStrength(str, Enum):
+    """Strength classification for a stat category."""
+
+    STRONG = "strong"
+    AVERAGE = "average"
+    WEAK = "weak"
+
+
+class AffordabilityTag(str, Enum):
+    """Affordability classification for recommendations."""
+
+    AFFORDABLE = "affordable"  # <= 40% of remaining budget
+    STRETCH = "stretch"  # > 40% of remaining budget
+
+
+class CategoryAnalysis(BaseModel):
+    """Analysis of a single stat category for the roster."""
+
+    category: str = Field(description="Category name (PPG, RPG, etc.)")
+    team_total: float = Field(description="Sum of category across roster")
+    league_mean: float = Field(description="Average team total in league")
+    league_std: float = Field(description="Standard deviation of team totals")
+    z_score: float = Field(description="Team's z-score for this category")
+    strength: CategoryStrength = Field(description="Classification based on z-score")
+
+
+class RosterCategoryAnalysis(BaseModel):
+    """Complete category analysis for a roster."""
+
+    categories: list[CategoryAnalysis] = Field(description="Analysis per category")
+    strong_categories: list[str] = Field(description="Categories where team is strong")
+    weak_categories: list[str] = Field(description="Categories where team is weak")
+    average_categories: list[str] = Field(description="Categories at league average")
+
+
+class CategoryAwareRecommendation(BaseModel):
+    """A recommendation with category-aware analysis."""
+
+    player_id: str
+    name: str
+    team: str
+    position: str
+    projected_fpts: float
+    auction_value: float
+    suggested_max_bid: float
+    fills_slot: str
+    priority_rank: int
+    # Category-aware fields
+    strategy: Literal["fill_gap", "reinforce_strength"] = Field(
+        description="Whether this player fills weak categories or reinforces strengths"
+    )
+    target_categories: list[str] = Field(
+        description="Categories this player excels in that match the strategy"
+    )
+    affordability: AffordabilityTag = Field(description="Budget affordability tag")
+    category_fit_score: float = Field(
+        ge=0, le=100, description="How well player fits roster needs (0-100)"
+    )
+    # Individual stat projections
+    points: float = Field(default=0.0, description="Points per game")
+    rebounds: float = Field(default=0.0, description="Rebounds per game")
+    assists: float = Field(default=0.0, description="Assists per game")
+    steals: float = Field(default=0.0, description="Steals per game")
+    blocks: float = Field(default=0.0, description="Blocks per game")
+    turnovers: float = Field(default=0.0, description="Turnovers per game")
+    fg_pct: float = Field(default=0.0, description="Field goal percentage")
+    ft_pct: float = Field(default=0.0, description="Free throw percentage")
+    three_made: float = Field(default=0.0, description="Three-pointers made per game")
 
 
 class Position(str, Enum):

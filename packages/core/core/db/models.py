@@ -27,6 +27,7 @@ class Player(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     stats = relationship("PlayerGameStats", back_populates="player")
+    season_stats = relationship("PlayerSeasonStats", back_populates="player")
 
 
 class Game(Base):
@@ -87,3 +88,46 @@ class GamePrediction(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     game = relationship("Game", back_populates="predictions")
+
+
+class PlayerSeasonStats(Base):
+    """Aggregated season stats for a player (used for ML training).
+
+    Stores per-game averages for a player's season, including all 9 fantasy
+    categories needed for projection models.
+    """
+
+    __tablename__ = "player_season_stats"
+
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer, ForeignKey("players.id"))
+    season = Column(String(10), nullable=False)  # e.g., "2024-25"
+
+    # Games and minutes
+    games_played = Column(Integer, default=0)
+    minutes_per_game = Column(Float, default=0.0)
+
+    # Per-game averages (9-category fantasy stats)
+    ppg = Column(Float, default=0.0)  # Points per game
+    rpg = Column(Float, default=0.0)  # Rebounds per game
+    apg = Column(Float, default=0.0)  # Assists per game
+    spg = Column(Float, default=0.0)  # Steals per game
+    bpg = Column(Float, default=0.0)  # Blocks per game
+    topg = Column(Float, default=0.0)  # Turnovers per game
+    fg_pct = Column(Float, default=0.0)  # Field goal percentage
+    ft_pct = Column(Float, default=0.0)  # Free throw percentage
+    three_pm = Column(Float, default=0.0)  # Three pointers made per game
+
+    # Additional useful stats
+    three_pct = Column(Float, default=0.0)  # Three point percentage
+    fga = Column(Float, default=0.0)  # Field goal attempts per game
+    fta = Column(Float, default=0.0)  # Free throw attempts per game
+
+    # Player metadata at time of season
+    age = Column(Integer)
+    team = Column(String(10))
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    player = relationship("Player", back_populates="season_stats")
