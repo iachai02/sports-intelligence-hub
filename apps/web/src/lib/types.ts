@@ -153,3 +153,54 @@ export interface CategoryRecommendationsResponse {
   fill_gap_recommendations: CategoryAwareRecommendation[];
   reinforce_recommendations: CategoryAwareRecommendation[];
 }
+
+// Player Stats Browser Types
+
+export interface PlayerStats {
+  player_id: string;
+  name: string;
+  team: string;
+  position: string;
+  projected_fpts: number;
+  auction_value: number;
+  ppg: number;
+  rpg: number;
+  apg: number;
+  spg: number;
+  bpg: number;
+  topg: number;
+  fg_pct: number;
+  ft_pct: number;
+  three_pm: number;
+}
+
+export interface PlayerListResponse {
+  players: PlayerStats[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
+export interface PlayerStatsSearchResult {
+  player_id: string;
+  name: string;
+  team: string;
+  position: string;
+  projected_fpts: number;
+  auction_value: number;
+}
+
+export interface PlayerComparisonResponse {
+  players: PlayerStats[];
+}
+
+export interface PlayerStatsFilters {
+  search?: string;
+  position?: string;
+  team?: string;
+  sortBy: string;
+  sortOrder: 'asc' | 'desc';
+  page: number;
+  perPage: number;
+}

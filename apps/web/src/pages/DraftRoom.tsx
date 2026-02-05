@@ -19,6 +19,7 @@ import { MyRoster } from '../components/draft-room/MyRoster';
 import { RecommendationsPanel, type RecommendationFilters } from '../components/draft-room/RecommendationsPanel';
 import { PlayerSearch } from '../components/draft-room/PlayerSearch';
 import { TakenPlayersPanel } from '../components/draft-room/TakenPlayersPanel';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 const DEFAULT_FILTERS: RecommendationFilters = {
   scoringMode: 'balanced',
@@ -159,22 +160,25 @@ export function DraftRoom() {
   // Show create session screen if no session
   if (!sessionId) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
-          <h1 className="text-2xl font-bold mb-4">Fantasy Draft Room</h1>
-          <p className="text-gray-600 mb-6">
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
+        <div className="bg-card border border-border p-8 rounded-lg shadow-lg text-center max-w-md">
+          <h1 className="text-2xl font-bold mb-4 text-foreground">Fantasy Draft Room</h1>
+          <p className="text-muted-foreground mb-6">
             Start a new draft session to get real-time pick recommendations
             based on player projections and your roster needs.
           </p>
           <button
             onClick={handleCreateSession}
             disabled={isLoading}
-            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-semibold"
+            className="w-full px-6 py-3 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 disabled:bg-muted disabled:text-muted-foreground font-semibold transition-colors"
           >
             {isLoading ? 'Creating Session...' : 'Start Draft Session'}
           </button>
           {error && (
-            <p className="mt-4 text-red-600">{error}</p>
+            <p className="mt-4 text-stat-negative">{error}</p>
           )}
         </div>
       </div>
@@ -183,31 +187,32 @@ export function DraftRoom() {
 
   // Main draft room UI
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white shadow">
+      <header className="bg-card border-b border-border shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-xl font-bold">Fantasy Draft Room</h1>
+          <h1 className="text-xl font-bold text-foreground">Fantasy Draft Room</h1>
           <div className="flex items-center gap-4">
             {draftState && (
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 {draftState.players_available} available • {draftState.players_taken_by_others} taken
               </span>
             )}
             <button
               onClick={handleCreateSession}
-              className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+              className="px-3 py-1 text-sm bg-muted hover:bg-muted/80 rounded text-foreground transition-colors"
             >
               New Session
             </button>
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
       {/* Error banner */}
       {error && (
-        <div className="bg-red-100 border-l-4 border-red-500 p-4 mx-4 mt-4">
-          <p className="text-red-700">{error}</p>
+        <div className="bg-stat-negative/10 border-l-4 border-stat-negative p-4 mx-4 mt-4">
+          <p className="text-stat-negative">{error}</p>
         </div>
       )}
 

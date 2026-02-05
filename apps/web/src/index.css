@@ -2,6 +2,113 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-50 text-gray-900;
+@layer base {
+  :root {
+    /* Light theme (default for other pages) */
+    --background: 0 0% 98%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 217 91% 60%; /* Electric Blue */
+    --accent-foreground: 0 0% 100%;
+    --border: 240 5.9% 90%;
+    --ring: 217 91% 60%;
+    --input: 0 0% 100%;
+    --stat-positive: 142 71% 45%;
+    --stat-negative: 0 72% 51%;
+    --stat-neutral: 240 3.8% 46.1%;
+  }
+
+  .dark {
+    /* Dark theme - more grayish, not pure black */
+    --background: 220 13% 13%;
+    --foreground: 210 20% 98%;
+    --card: 220 13% 16%;
+    --card-foreground: 210 20% 98%;
+    --muted: 220 12% 20%;
+    --muted-foreground: 215 16% 60%;
+    --accent: 217 91% 60%; /* Electric Blue */
+    --accent-foreground: 0 0% 100%;
+    --border: 220 12% 24%;
+    --ring: 217 91% 60%;
+    --input: 220 13% 18%;
+    --stat-positive: 142 71% 45%;
+    --stat-negative: 0 72% 51%;
+    --stat-neutral: 215 16% 60%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Form elements in dark mode */
+  .dark input,
+  .dark select,
+  .dark textarea {
+    background-color: hsl(var(--input));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border));
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .dark select option {
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+  }
+
+  /* Custom scrollbar for dark mode */
+  .dark ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .dark ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 4px;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
+@layer utilities {
+  /* Tabular numbers for stats alignment */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Focus visible ring */
+  .focus-ring {
+    outline: none;
+  }
+
+  .focus-ring:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
 }

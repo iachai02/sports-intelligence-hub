@@ -8,7 +8,7 @@ export function OptimizeButton({ onClick, loading }: OptimizeButtonProps) {
     <button
       onClick={onClick}
       disabled={loading}
-      className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+      className="px-6 py-3 bg-accent text-accent-foreground font-semibold rounded-lg hover:bg-accent/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed transition-colors flex items-center gap-2"
     >
       {loading && (
         <svg

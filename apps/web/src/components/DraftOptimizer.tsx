@@ -27,8 +27,8 @@ export function DraftOptimizer() {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Fantasy Draft Optimizer</h1>
-        <p className="text-gray-600">Optimize your fantasy basketball auction draft roster</p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Fantasy Draft Optimizer</h1>
+        <p className="text-muted-foreground">Optimize your fantasy basketball auction draft roster</p>
       </div>
 
       <div className="flex justify-center">
@@ -36,8 +36,8 @@ export function DraftOptimizer() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-800">{error}</p>
+        <div className="bg-stat-negative/10 border border-stat-negative/20 rounded-lg p-4">
+          <p className="text-stat-negative">{error}</p>
         </div>
       )}
 
@@ -47,8 +47,8 @@ export function DraftOptimizer() {
             <span
               className={`px-3 py-1 rounded-full text-sm font-medium ${
                 result.status === 'Optimal'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-yellow-100 text-yellow-800'
+                  ? 'bg-stat-positive/20 text-stat-positive'
+                  : 'bg-yellow-500/20 text-yellow-500'
               }`}
             >
               {result.status}

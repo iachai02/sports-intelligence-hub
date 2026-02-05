@@ -11,38 +11,38 @@ export function BudgetTracker({ remaining, total, spotsRemaining }: BudgetTracke
 
   // Color coding based on budget health
   const getStatusColor = () => {
-    if (avgPerSpot < 5 && spotsRemaining > 3) return 'text-red-600';
-    if (avgPerSpot < 10 && spotsRemaining > 5) return 'text-yellow-600';
-    return 'text-green-600';
+    if (avgPerSpot < 5 && spotsRemaining > 3) return 'text-stat-negative';
+    if (avgPerSpot < 10 && spotsRemaining > 5) return 'text-yellow-500';
+    return 'text-stat-positive';
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h3 className="text-lg font-semibold mb-3">Budget</h3>
+    <div className="bg-card border border-border rounded-lg shadow p-4">
+      <h3 className="text-lg font-semibold mb-3 text-foreground">Budget</h3>
 
       {/* Progress bar */}
-      <div className="w-full bg-gray-200 rounded-full h-4 mb-3">
+      <div className="w-full bg-muted rounded-full h-4 mb-3">
         <div
-          className="bg-blue-600 h-4 rounded-full transition-all"
+          className="bg-accent h-4 rounded-full transition-all"
           style={{ width: `${Math.min(percentSpent, 100)}%` }}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div>
-          <span className="text-gray-500">Remaining</span>
+          <span className="text-muted-foreground">Remaining</span>
           <p className={`text-2xl font-bold ${getStatusColor()}`}>${remaining}</p>
         </div>
         <div>
-          <span className="text-gray-500">Spent</span>
-          <p className="text-2xl font-bold text-gray-800">${spent}</p>
+          <span className="text-muted-foreground">Spent</span>
+          <p className="text-2xl font-bold text-foreground">${spent}</p>
         </div>
         <div>
-          <span className="text-gray-500">Spots Left</span>
-          <p className="text-lg font-semibold">{spotsRemaining}</p>
+          <span className="text-muted-foreground">Spots Left</span>
+          <p className="text-lg font-semibold text-foreground">{spotsRemaining}</p>
         </div>
         <div>
-          <span className="text-gray-500">Avg/Spot</span>
+          <span className="text-muted-foreground">Avg/Spot</span>
           <p className={`text-lg font-semibold ${getStatusColor()}`}>
             ${avgPerSpot.toFixed(0)}
           </p>

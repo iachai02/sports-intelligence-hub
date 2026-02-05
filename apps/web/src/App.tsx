@@ -1,21 +1,27 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { DraftOptimizer } from './components/DraftOptimizer'
 import { DraftRoom } from './pages/DraftRoom'
+import { PlayerStats } from './pages/PlayerStats'
+import { ThemeProvider } from './contexts/ThemeContext'
+import { ThemeToggle } from './components/ThemeToggle'
 
 function HomePage() {
   return (
-    <div className="min-h-screen py-8 bg-gray-100">
+    <div className="min-h-screen py-8 bg-background">
       <div className="max-w-4xl mx-auto px-4">
-        <h1 className="text-3xl font-bold text-center mb-8">Sports Intelligence Hub</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-foreground">Sports Intelligence Hub</h1>
+          <ThemeToggle />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Draft Optimizer Card */}
           <Link
             to="/optimizer"
-            className="block p-6 bg-white rounded-lg shadow hover:shadow-lg transition"
+            className="block p-6 bg-card rounded-lg shadow hover:shadow-lg transition border border-border"
           >
-            <h2 className="text-xl font-semibold mb-2">Draft Optimizer</h2>
-            <p className="text-gray-600">
+            <h2 className="text-xl font-semibold mb-2 text-foreground">Draft Optimizer</h2>
+            <p className="text-muted-foreground">
               Use linear programming to find the optimal roster within your budget constraints.
             </p>
           </Link>
@@ -23,11 +29,22 @@ function HomePage() {
           {/* Draft Room Card */}
           <Link
             to="/draft-room"
-            className="block p-6 bg-white rounded-lg shadow hover:shadow-lg transition"
+            className="block p-6 bg-card rounded-lg shadow hover:shadow-lg transition border border-border"
           >
-            <h2 className="text-xl font-semibold mb-2">Draft Room</h2>
-            <p className="text-gray-600">
+            <h2 className="text-xl font-semibold mb-2 text-foreground">Draft Room</h2>
+            <p className="text-muted-foreground">
               Live auction draft assistant with real-time recommendations and roster tracking.
+            </p>
+          </Link>
+
+          {/* Player Stats Browser Card */}
+          <Link
+            to="/stats"
+            className="block p-6 bg-card rounded-lg shadow hover:shadow-lg transition border border-border"
+          >
+            <h2 className="text-xl font-semibold mb-2 text-foreground">Player Stats Browser</h2>
+            <p className="text-muted-foreground">
+              Browse, search, filter, and compare NBA player statistics.
             </p>
           </Link>
         </div>
@@ -38,11 +55,14 @@ function HomePage() {
 
 function OptimizerPage() {
   return (
-    <div className="min-h-screen py-8">
+    <div className="min-h-screen py-8 bg-background">
       <div className="max-w-4xl mx-auto px-4">
-        <Link to="/" className="text-blue-600 hover:underline mb-4 inline-block">
-          &larr; Back to Home
-        </Link>
+        <div className="flex items-center justify-between mb-4">
+          <Link to="/" className="text-accent hover:underline">
+            &larr; Back to Home
+          </Link>
+          <ThemeToggle />
+        </div>
         <DraftOptimizer />
       </div>
     </div>
@@ -51,13 +71,16 @@ function OptimizerPage() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/optimizer" element={<OptimizerPage />} />
-        <Route path="/draft-room" element={<DraftRoom />} />
-      </Routes>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/optimizer" element={<OptimizerPage />} />
+          <Route path="/draft-room" element={<DraftRoom />} />
+          <Route path="/stats" element={<PlayerStats />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   )
 }
 
