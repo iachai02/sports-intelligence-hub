@@ -916,36 +916,3 @@ class DraftState:
             "players_available": len(self.available_players),
             "slots_needed": [s.value for s in self._slots_needed],
         }
-
-
-# Session storage (in-memory for now)
-_sessions: dict[str, DraftState] = {}
-
-
-def create_session(
-    player_pool: list[PlayerProjection],
-    config: RosterConfig | None = None,
-    num_teams: int = 12,
-) -> DraftState:
-    """Create and store a new draft session."""
-    session = DraftState(player_pool, config, num_teams)
-    _sessions[session.session_id] = session
-    return session
-
-
-def get_session(session_id: str) -> DraftState | None:
-    """Retrieve a draft session by ID."""
-    return _sessions.get(session_id)
-
-
-def delete_session(session_id: str) -> bool:
-    """Delete a draft session."""
-    if session_id in _sessions:
-        del _sessions[session_id]
-        return True
-    return False
-
-
-def list_sessions() -> list[str]:
-    """List all active session IDs."""
-    return list(_sessions.keys())

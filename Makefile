@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format clean api web-install web-dev
+.PHONY: install dev test lint format clean api web-install web-dev migrate migrate-create
 
 # Install dependencies
 install:
@@ -41,6 +41,14 @@ docker-up:
 # Stop Docker services
 docker-down:
 	docker compose -f infrastructure/docker/docker-compose.yml down
+
+# Run database migrations
+migrate:
+	cd packages/core && uv run alembic upgrade head
+
+# Create a new migration
+migrate-create:
+	cd packages/core && uv run alembic revision --autogenerate -m "$(msg)"
 
 # Install web dependencies
 web-install:

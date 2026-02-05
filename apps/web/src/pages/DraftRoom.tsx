@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react';
 import {
-  createDraftSession,
   getDraftState,
   draftPlayer,
   markPlayerTaken,
   getCategoryRecommendations,
   searchPlayers,
   undoLastAction,
+  skipPlayer,
 } from '../lib/api';
 import type {
   DraftState,
@@ -19,7 +19,10 @@ import { MyRoster } from '../components/draft-room/MyRoster';
 import { RecommendationsPanel, type RecommendationFilters } from '../components/draft-room/RecommendationsPanel';
 import { PlayerSearch } from '../components/draft-room/PlayerSearch';
 import { TakenPlayersPanel } from '../components/draft-room/TakenPlayersPanel';
+import { SessionPicker } from '../components/draft-room/SessionPicker';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { AuthButton } from '../components/AuthButton';
+import { useAuth } from '../contexts/AuthContext';
 
 const DEFAULT_FILTERS: RecommendationFilters = {
   scoringMode: 'balanced',
@@ -27,7 +30,8 @@ const DEFAULT_FILTERS: RecommendationFilters = {
 };
 
 export function DraftRoom() {
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [sessionId, setSessionId] = useState<number | null>(null);
   const [draftState, setDraftState] = useState<DraftState | null>(null);
   const [rosterAnalysis, setRosterAnalysis] = useState<RosterCategoryAnalysis | null>(null);
   const [fillGapRecs, setFillGapRecs] = useState<CategoryAwareRecommendation[]>([]);
@@ -35,12 +39,12 @@ export function DraftRoom() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filter and skip state
+  // Filter state (skipped players now persisted via API)
   const [filters, setFilters] = useState<RecommendationFilters>(DEFAULT_FILTERS);
-  const [skippedPlayerIds, setSkippedPlayerIds] = useState<Set<string>>(new Set());
+  const [skippedCount, setSkippedCount] = useState(0);
 
   // Refresh state and recommendations
-  const refreshState = useCallback(async (sid: string, currentFilters: RecommendationFilters, currentSkipped: Set<string>) => {
+  const refreshState = useCallback(async (sid: number, currentFilters: RecommendationFilters) => {
     try {
       const [state, catRecs] = await Promise.all([
         getDraftState(sid),
@@ -52,7 +56,6 @@ export function DraftRoom() {
           minFpts: currentFilters.minFpts,
           maxFpts: currentFilters.maxFpts,
           affordability: currentFilters.affordability.length > 0 ? currentFilters.affordability : undefined,
-          skippedIds: currentSkipped.size > 0 ? Array.from(currentSkipped) : undefined,
         }),
       ]);
       setDraftState(state);
@@ -65,19 +68,17 @@ export function DraftRoom() {
     }
   }, []);
 
-  // Create new session
-  const handleCreateSession = async () => {
+  // Select session (from session picker or create)
+  const handleSelectSession = async (sid: number) => {
     setIsLoading(true);
     setError(null);
-    // Reset filters and skipped on new session
     setFilters(DEFAULT_FILTERS);
-    setSkippedPlayerIds(new Set());
+    setSkippedCount(0);
     try {
-      const session = await createDraftSession(12, 200);
-      setSessionId(session.session_id);
-      await refreshState(session.session_id, DEFAULT_FILTERS, new Set());
+      setSessionId(sid);
+      await refreshState(sid, DEFAULT_FILTERS);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create session');
+      setError(err instanceof Error ? err.message : 'Failed to load session');
     } finally {
       setIsLoading(false);
     }
@@ -88,11 +89,7 @@ export function DraftRoom() {
     if (!sessionId) return;
     try {
       await draftPlayer(sessionId, playerId, cost);
-      // Remove from skipped if they were skipped
-      const newSkipped = new Set(skippedPlayerIds);
-      newSkipped.delete(playerId);
-      setSkippedPlayerIds(newSkipped);
-      await refreshState(sessionId, filters, newSkipped);
+      await refreshState(sessionId, filters);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to draft player');
     }
@@ -103,40 +100,38 @@ export function DraftRoom() {
     if (!sessionId) return;
     try {
       await markPlayerTaken(sessionId, playerId);
-      // Remove from skipped if they were skipped
-      const newSkipped = new Set(skippedPlayerIds);
-      newSkipped.delete(playerId);
-      setSkippedPlayerIds(newSkipped);
-      await refreshState(sessionId, filters, newSkipped);
+      await refreshState(sessionId, filters);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to mark player taken');
     }
   };
 
-  // Skip a player (hide from recommendations this session)
-  const handleSkip = (playerId: string) => {
-    const newSkipped = new Set(skippedPlayerIds);
-    newSkipped.add(playerId);
-    setSkippedPlayerIds(newSkipped);
-    // Refresh recommendations with new skipped list
-    if (sessionId) {
-      refreshState(sessionId, filters, newSkipped);
+  // Skip a player (now persisted via API)
+  const handleSkip = async (playerId: string) => {
+    if (!sessionId) return;
+    try {
+      await skipPlayer(sessionId, playerId);
+      setSkippedCount(prev => prev + 1);
+      await refreshState(sessionId, filters);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to skip player');
     }
   };
 
-  // Clear all skipped players
+  // Clear skipped is no longer a simple reset since skips are persisted.
+  // For now, we just note that skipped players are managed server-side.
   const handleClearSkipped = () => {
-    setSkippedPlayerIds(new Set());
-    if (sessionId) {
-      refreshState(sessionId, filters, new Set());
-    }
+    // Skipped players are persisted in the DB.
+    // A full "clear" would need an API endpoint.
+    // For now, just reset the counter display.
+    setSkippedCount(0);
   };
 
   // Handle filter changes
   const handleFiltersChange = (newFilters: RecommendationFilters) => {
     setFilters(newFilters);
     if (sessionId) {
-      refreshState(sessionId, newFilters, skippedPlayerIds);
+      refreshState(sessionId, newFilters);
     }
   };
 
@@ -145,7 +140,7 @@ export function DraftRoom() {
     if (!sessionId) return;
     try {
       await undoLastAction(sessionId);
-      await refreshState(sessionId, filters, skippedPlayerIds);
+      await refreshState(sessionId, filters);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to undo');
     }
@@ -157,30 +152,71 @@ export function DraftRoom() {
     return searchPlayers(sessionId, query, false, signal);
   };
 
-  // Show create session screen if no session
-  if (!sessionId) {
+  // Back to session picker
+  const handleBackToSessions = () => {
+    setSessionId(null);
+    setDraftState(null);
+    setRosterAnalysis(null);
+    setFillGapRecs([]);
+    setReinforceRecs([]);
+    setFilters(DEFAULT_FILTERS);
+    setSkippedCount(0);
+    setError(null);
+  };
+
+  // Auth loading state
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="absolute top-4 right-4">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  // Not authenticated - show sign in prompt
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="absolute top-4 right-4 flex items-center gap-3">
+          <AuthButton />
           <ThemeToggle />
         </div>
         <div className="bg-card border border-border p-8 rounded-lg shadow-lg text-center max-w-md">
           <h1 className="text-2xl font-bold mb-4 text-foreground">Fantasy Draft Room</h1>
           <p className="text-muted-foreground mb-6">
-            Start a new draft session to get real-time pick recommendations
-            based on player projections and your roster needs.
+            Sign in to access the Draft Room. Your sessions are saved so you can
+            resume anytime.
           </p>
-          <button
-            onClick={handleCreateSession}
-            disabled={isLoading}
-            className="w-full px-6 py-3 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 disabled:bg-muted disabled:text-muted-foreground font-semibold transition-colors"
-          >
-            {isLoading ? 'Creating Session...' : 'Start Draft Session'}
-          </button>
-          {error && (
-            <p className="mt-4 text-stat-negative">{error}</p>
-          )}
+          <AuthButton />
         </div>
+      </div>
+    );
+  }
+
+  // Authenticated but no session selected - show session picker
+  if (!sessionId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="bg-card border-b border-border shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 className="text-xl font-bold text-foreground">Fantasy Draft Room</h1>
+            <div className="flex items-center gap-3">
+              <AuthButton />
+              <ThemeToggle />
+            </div>
+          </div>
+        </header>
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <SessionPicker onSelectSession={handleSelectSession} />
+          {isLoading && (
+            <div className="text-center text-muted-foreground mt-4">Loading session...</div>
+          )}
+          {error && (
+            <div className="bg-stat-negative/10 border-l-4 border-stat-negative p-4 mt-4">
+              <p className="text-stat-negative">{error}</p>
+            </div>
+          )}
+        </main>
       </div>
     );
   }
@@ -195,15 +231,16 @@ export function DraftRoom() {
           <div className="flex items-center gap-4">
             {draftState && (
               <span className="text-sm text-muted-foreground">
-                {draftState.players_available} available • {draftState.players_taken_by_others} taken
+                {draftState.players_available} available &middot; {draftState.players_taken_by_others} taken
               </span>
             )}
             <button
-              onClick={handleCreateSession}
+              onClick={handleBackToSessions}
               className="px-3 py-1 text-sm bg-muted hover:bg-muted/80 rounded text-foreground transition-colors"
             >
-              New Session
+              Sessions
             </button>
+            <AuthButton />
             <ThemeToggle />
           </div>
         </div>
@@ -247,7 +284,7 @@ export function DraftRoom() {
                 budgetRemaining={draftState.budget_remaining}
                 filters={filters}
                 onFiltersChange={handleFiltersChange}
-                skippedCount={skippedPlayerIds.size}
+                skippedCount={skippedCount}
                 onClearSkipped={handleClearSkipped}
               />
             </div>

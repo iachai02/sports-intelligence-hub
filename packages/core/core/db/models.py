@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -155,3 +155,116 @@ class PlayerSeasonStats(Base):
     )
 
     player: Mapped["Player"] = relationship(back_populates="season_stats")
+
+
+class DraftSession(Base):
+    """A user's draft session."""
+
+    __tablename__ = "draft_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100), default="Draft Session")
+    league_type: Mapped[str] = mapped_column(String(20), default="9cat")
+    budget_total: Mapped[int] = mapped_column(Integer, default=200)
+    roster_size: Mapped[int] = mapped_column(Integer, default=13)
+    num_teams: Mapped[int] = mapped_column(Integer, default=12)
+    season: Mapped[str] = mapped_column(String(10), default="2024-25")
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        insert_default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    user: Mapped["User"] = relationship()
+    picks: Mapped[list["DraftPick"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+    taken_players: Mapped[list["TakenPlayer"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+    skipped_players: Mapped[list["SkippedPlayer"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+    preferences: Mapped["SessionPreferences | None"] = relationship(
+        back_populates="session", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class DraftPick(Base):
+    """A player drafted to the user's team."""
+
+    __tablename__ = "draft_picks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("draft_sessions.id", ondelete="CASCADE")
+    )
+    player_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    purchase_price: Mapped[float] = mapped_column(Float, nullable=False)
+    suggested_price: Mapped[float | None] = mapped_column(Float, default=None)
+    slot: Mapped[str | None] = mapped_column(String(10), default=None)
+    pick_order: Mapped[int | None] = mapped_column(Integer, default=None)
+    picked_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
+
+    session: Mapped["DraftSession"] = relationship(back_populates="picks")
+
+    __table_args__ = (UniqueConstraint("session_id", "player_id"),)
+
+
+class TakenPlayer(Base):
+    """A player taken by another team."""
+
+    __tablename__ = "taken_players"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("draft_sessions.id", ondelete="CASCADE")
+    )
+    player_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    marked_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
+
+    session: Mapped["DraftSession"] = relationship(back_populates="taken_players")
+
+    __table_args__ = (UniqueConstraint("session_id", "player_id"),)
+
+
+class SkippedPlayer(Base):
+    """A player skipped during recommendations."""
+
+    __tablename__ = "skipped_players"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("draft_sessions.id", ondelete="CASCADE")
+    )
+    player_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    skip_reason: Mapped[str | None] = mapped_column(String(50), default=None)
+    recommendation_context: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, default=None
+    )
+    skipped_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
+
+    session: Mapped["DraftSession"] = relationship(back_populates="skipped_players")
+
+
+class SessionPreferences(Base):
+    """User filter preferences for a draft session."""
+
+    __tablename__ = "session_preferences"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("draft_sessions.id", ondelete="CASCADE"), unique=True
+    )
+    scoring_mode: Mapped[str] = mapped_column(String(20), default="balanced")
+    position_filter: Mapped[str | None] = mapped_column(String(10), default=None)
+    min_cost: Mapped[int | None] = mapped_column(Integer, default=None)
+    max_cost: Mapped[int | None] = mapped_column(Integer, default=None)
+    min_fpts: Mapped[float | None] = mapped_column(Float, default=None)
+    max_fpts: Mapped[float | None] = mapped_column(Float, default=None)
+    updated_at: Mapped[datetime] = mapped_column(
+        insert_default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    session: Mapped["DraftSession"] = relationship(back_populates="preferences")

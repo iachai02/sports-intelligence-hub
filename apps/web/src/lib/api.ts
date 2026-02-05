@@ -1,6 +1,7 @@
 import type {
   CategoryRecommendationsResponse,
   CreateSessionResponse,
+  DraftSessionListItem,
   DraftState,
   OptimizeRequest,
   OptimizeResponse,
@@ -16,6 +17,7 @@ export async function optimizeRoster(request: OptimizeRequest = {}): Promise<Opt
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify({
       use_mock_data: true,
       ...request,
@@ -30,24 +32,36 @@ export async function optimizeRoster(request: OptimizeRequest = {}): Promise<Opt
   return response.json();
 }
 
-// Draft Room API Functions
+// Draft Session API Functions
+
+export async function listDraftSessions(): Promise<DraftSessionListItem[]> {
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/`, {
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
 
 export async function createDraftSession(
   numTeams: number = 12,
   budget: number = 200,
-  useRealData: boolean = true,
+  name: string = 'Draft Session',
   season: string = '2024-25',
 ): Promise<CreateSessionResponse> {
-  const response = await fetch(`${API_URL}/api/v1/draft-room/session/create`, {
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({
-      use_mock_data: !useRealData,
-      use_real_data: useRealData,
+      name,
       num_teams: numTeams,
       budget: budget,
       season: season,
-      min_games: 20,
     }),
   });
 
@@ -59,8 +73,10 @@ export async function createDraftSession(
   return response.json();
 }
 
-export async function getDraftState(sessionId: string): Promise<DraftState> {
-  const response = await fetch(`${API_URL}/api/v1/draft-room/session/${sessionId}/state`);
+export async function getDraftState(sessionId: number): Promise<DraftState> {
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}`, {
+    credentials: 'include',
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -71,14 +87,15 @@ export async function getDraftState(sessionId: string): Promise<DraftState> {
 }
 
 export async function draftPlayer(
-  sessionId: string,
+  sessionId: number,
   playerId: string,
   cost: number,
   slot?: string,
 ): Promise<void> {
-  const response = await fetch(`${API_URL}/api/v1/draft-room/session/${sessionId}/draft-for-me`, {
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}/draft`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ player_id: playerId, cost, slot }),
   });
 
@@ -88,10 +105,11 @@ export async function draftPlayer(
   }
 }
 
-export async function markPlayerTaken(sessionId: string, playerId: string): Promise<void> {
-  const response = await fetch(`${API_URL}/api/v1/draft-room/session/${sessionId}/mark-taken`, {
+export async function markPlayerTaken(sessionId: number, playerId: string): Promise<void> {
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}/taken`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ player_id: playerId }),
   });
 
@@ -101,12 +119,27 @@ export async function markPlayerTaken(sessionId: string, playerId: string): Prom
   }
 }
 
+export async function skipPlayer(sessionId: number, playerId: string, reason?: string): Promise<void> {
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}/skip`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ player_id: playerId, reason }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+}
+
 export async function getRecommendations(
-  sessionId: string,
+  sessionId: number,
   topN: number = 5,
 ): Promise<Recommendation[]> {
   const response = await fetch(
-    `${API_URL}/api/v1/draft-room/session/${sessionId}/recommendations?top_n=${topN}`,
+    `${API_URL}/api/v1/draft-sessions/${sessionId}/recommendations?top_n=${topN}`,
+    { credentials: 'include' },
   );
 
   if (!response.ok) {
@@ -118,14 +151,14 @@ export async function getRecommendations(
 }
 
 export async function searchPlayers(
-  sessionId: string,
+  sessionId: number,
   query: string,
   includeTaken: boolean = false,
   signal?: AbortSignal,
 ): Promise<PlayerSearchResult[]> {
   const response = await fetch(
-    `${API_URL}/api/v1/draft-room/session/${sessionId}/search?q=${encodeURIComponent(query)}&include_taken=${includeTaken}`,
-    { signal },
+    `${API_URL}/api/v1/draft-sessions/${sessionId}/search?q=${encodeURIComponent(query)}&include_taken=${includeTaken}`,
+    { signal, credentials: 'include' },
   );
 
   if (!response.ok) {
@@ -136,9 +169,10 @@ export async function searchPlayers(
   return response.json();
 }
 
-export async function undoLastAction(sessionId: string): Promise<{ status: string }> {
-  const response = await fetch(`${API_URL}/api/v1/draft-room/session/${sessionId}/undo`, {
+export async function undoLastAction(sessionId: number): Promise<{ status: string }> {
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}/undo`, {
     method: 'POST',
+    credentials: 'include',
   });
 
   if (!response.ok) {
@@ -147,6 +181,35 @@ export async function undoLastAction(sessionId: string): Promise<{ status: strin
   }
 
   return response.json();
+}
+
+export async function deleteDraftSession(sessionId: number): Promise<void> {
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+}
+
+export async function updateDraftSession(
+  sessionId: number,
+  data: { name?: string; status?: string },
+): Promise<void> {
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
 }
 
 export interface RecommendationFilters {
@@ -161,7 +224,7 @@ export interface RecommendationFilters {
 }
 
 export async function getCategoryRecommendations(
-  sessionId: string,
+  sessionId: number,
   topN: number = 10,
   filters?: RecommendationFilters,
 ): Promise<CategoryRecommendationsResponse> {
@@ -180,7 +243,8 @@ export async function getCategoryRecommendations(
   }
 
   const response = await fetch(
-    `${API_URL}/api/v1/draft-room/session/${sessionId}/category-recommendations?${params}`,
+    `${API_URL}/api/v1/draft-sessions/${sessionId}/recommendations?${params}`,
+    { credentials: 'include' },
   );
 
   if (!response.ok) {

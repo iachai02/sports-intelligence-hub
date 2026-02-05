@@ -57,7 +57,7 @@ export interface TakenPlayer {
 }
 
 export interface DraftState {
-  session_id: string;
+  session_id: number;
   my_roster: RosterPlayer[];
   budget_remaining: number;
   budget_total: number;
@@ -93,11 +93,24 @@ export interface PlayerSearchResult {
 }
 
 export interface CreateSessionResponse {
-  session_id: string;
+  session_id: number;
+  name: string;
   roster_size: number;
   budget: number;
   num_teams: number;
   player_count: number;
+}
+
+export interface DraftSessionListItem {
+  id: number;
+  name: string;
+  status: string;
+  budget_total: number;
+  num_teams: number;
+  season: string;
+  pick_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 // Category-Aware Recommendations Types
