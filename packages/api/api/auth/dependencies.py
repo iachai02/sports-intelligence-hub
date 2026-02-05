@@ -75,3 +75,34 @@ def get_optional_user(
         return result.scalar_one_or_none()
     finally:
         session.close()
+
+
+def get_user_from_ws_token(token: str) -> User | None:
+    """Authenticate a user from a short-lived WS token.
+
+    WS tokens use the same JWT format but with a 'ws' type claim
+    and shorter expiry.
+
+    Args:
+        token: The WS JWT token from query param.
+
+    Returns:
+        User or None if invalid.
+    """
+    payload = verify_token(token)
+    if not payload:
+        return None
+
+    if payload.get("type") != "ws":
+        return None
+
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+
+    session = get_session()
+    try:
+        result = session.execute(select(User).where(User.id == int(user_id)))
+        return result.scalar_one_or_none()
+    finally:
+        session.close()

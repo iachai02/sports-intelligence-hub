@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, AlertCircle, BarChart3 } from 'lucide-react';
-import { ThemeToggle } from '../components/ThemeToggle';
+import { Loader2, AlertCircle, BarChart3 } from 'lucide-react';
 import type { PlayerStats as PlayerStatsType, PlayerStatsFilters } from '../lib/types';
 import { getPlayers, getPlayer, getTeams, comparePlayers } from '../lib/playerStatsApi';
 import {
@@ -165,17 +164,6 @@ export function PlayerStats() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <div className="flex items-center justify-between mb-4">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Home
-            </Link>
-            <ThemeToggle />
-          </div>
-
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
               <BarChart3 className="h-6 w-6 text-accent" />

@@ -8,7 +8,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import auth, draft, draft_sessions, health, players
+from api.routers import auth, draft, draft_sessions, health, players, rooms, websocket
 
 
 def create_app() -> FastAPI:
@@ -34,6 +34,8 @@ def create_app() -> FastAPI:
     app.include_router(draft.router, tags=["draft"])
     app.include_router(draft_sessions.router, tags=["draft-sessions"])
     app.include_router(players.router, tags=["players"])
+    app.include_router(rooms.router, tags=["rooms"])
+    app.include_router(websocket.router, tags=["websocket"])
 
     return app
 

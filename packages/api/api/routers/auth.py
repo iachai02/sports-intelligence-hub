@@ -1,6 +1,6 @@
 """Authentication API endpoints."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any
 
 from core.db.connection import get_session
@@ -172,3 +172,18 @@ def logout(response: Response) -> dict[str, str]:
     """Log out the current user by clearing the auth cookie."""
     clear_auth_cookie(response)
     return {"status": "logged_out"}
+
+
+@router.get("/ws-token")
+def get_ws_token(user: CurrentUser) -> dict[str, str]:
+    """Get a short-lived JWT token for WebSocket connections.
+
+    Since httpOnly cookies can't be read by JS for WS query params,
+    this endpoint issues a short-lived token (30 seconds) specifically
+    for WS authentication.
+    """
+    token = create_access_token(
+        {"sub": str(user.id), "type": "ws"},
+        expires_delta=timedelta(seconds=30),
+    )
+    return {"token": token}

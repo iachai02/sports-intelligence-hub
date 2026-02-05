@@ -167,6 +167,127 @@ export interface CategoryRecommendationsResponse {
   reinforce_recommendations: CategoryAwareRecommendation[];
 }
 
+// Room / Multi-User Types
+
+export interface RoomMember {
+  id: number;
+  user_id: number | null;
+  team_name: string;
+  team_order: number;
+  is_phantom: boolean;
+  is_online: boolean;
+  user_name: string | null;
+  user_avatar: string | null;
+}
+
+export interface RoomListItem {
+  id: number;
+  name: string;
+  friend_code: string;
+  status: string;
+  budget_total: number;
+  num_teams: number;
+  season: string;
+  member_count: number;
+  created_at: string;
+}
+
+export interface RoomDetails {
+  id: number;
+  name: string;
+  friend_code: string;
+  draft_format: string;
+  status: string;
+  budget_total: number;
+  roster_size: number;
+  num_teams: number;
+  season: string;
+  commissioner_id: number;
+  members: RoomMember[];
+  created_at: string;
+}
+
+export interface CreateRoomResponse {
+  room_id: number;
+  friend_code: string;
+  name: string;
+  budget: number;
+  num_teams: number;
+}
+
+export interface ActivityLogEntry {
+  id: number;
+  action_type: string;
+  payload: Record<string, unknown> | null;
+  user_name: string | null;
+  created_at: string;
+}
+
+export interface BoardTeam {
+  member_id: number;
+  team_name: string;
+  team_order: number;
+  is_phantom: boolean;
+  user_id: number | null;
+  budget_total: number;
+  budget_remaining: number;
+  total_spent: number;
+  pick_count: number;
+  picks: BoardPick[];
+}
+
+export interface BoardPick {
+  player_id: string;
+  player_name: string;
+  purchase_price: number;
+  slot: string | null;
+  pick_order: number | null;
+  picked_at: string;
+}
+
+export interface BoardState {
+  session_id: number;
+  num_teams: number;
+  roster_size: number;
+  teams: BoardTeam[];
+  total_picks: number;
+}
+
+export type RoomStatus = 'waiting' | 'active' | 'completed' | 'archived';
+
+// WebSocket message types
+export interface WsMessage {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface WsPickReported extends WsMessage {
+  type: 'pick_reported';
+  player_id: string;
+  player_name: string;
+  team_name: string;
+  member_id: number;
+  price: number;
+  slot: string | null;
+  reported_by: string;
+  pick_order: number;
+}
+
+export interface WsPickUndone extends WsMessage {
+  type: 'pick_undone';
+  player_id: string;
+  player_name: string;
+  team_name: string;
+  undone_by: string;
+}
+
+export interface WsMemberEvent extends WsMessage {
+  type: 'member_joined' | 'member_left' | 'member_connected' | 'member_disconnected';
+  user_id: number;
+  user_name: string;
+  connected_users?: number[];
+}
+
 // Player Stats Browser Types
 
 export interface PlayerStats {

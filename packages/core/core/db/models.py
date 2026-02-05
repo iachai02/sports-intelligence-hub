@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -158,13 +158,15 @@ class PlayerSeasonStats(Base):
 
 
 class DraftSession(Base):
-    """A user's draft session."""
+    """A user's draft session (room). user_id = commissioner."""
 
     __tablename__ = "draft_sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100), default="Draft Session")
+    friend_code: Mapped[str] = mapped_column(String(8), unique=True, nullable=False)
+    draft_format: Mapped[str] = mapped_column(String(20), default="auction")
     league_type: Mapped[str] = mapped_column(String(20), default="9cat")
     budget_total: Mapped[int] = mapped_column(Integer, default=200)
     roster_size: Mapped[int] = mapped_column(Integer, default=13)
@@ -189,10 +191,16 @@ class DraftSession(Base):
     preferences: Mapped["SessionPreferences | None"] = relationship(
         back_populates="session", cascade="all, delete-orphan", uselist=False
     )
+    members: Mapped[list["RoomMember"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+    activity_log: Mapped[list["RoomActivityLog"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
 
 
 class DraftPick(Base):
-    """A player drafted to the user's team."""
+    """A player drafted to a team."""
 
     __tablename__ = "draft_picks"
 
@@ -201,6 +209,9 @@ class DraftPick(Base):
         ForeignKey("draft_sessions.id", ondelete="CASCADE")
     )
     player_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    drafter_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("room_members.id", ondelete="SET NULL"), default=None
+    )
     purchase_price: Mapped[float] = mapped_column(Float, nullable=False)
     suggested_price: Mapped[float | None] = mapped_column(Float, default=None)
     slot: Mapped[str | None] = mapped_column(String(10), default=None)
@@ -208,6 +219,7 @@ class DraftPick(Base):
     picked_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
 
     session: Mapped["DraftSession"] = relationship(back_populates="picks")
+    drafter_member: Mapped["RoomMember | None"] = relationship()
 
     __table_args__ = (UniqueConstraint("session_id", "player_id"),)
 
@@ -268,3 +280,49 @@ class SessionPreferences(Base):
     )
 
     session: Mapped["DraftSession"] = relationship(back_populates="preferences")
+
+
+class RoomMember(Base):
+    """A member of a draft room (team in the draft)."""
+
+    __tablename__ = "room_members"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("draft_sessions.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), default=None
+    )
+    team_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    team_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_phantom: Mapped[bool] = mapped_column(Boolean, default=False)
+    budget_total: Mapped[int | None] = mapped_column(Integer, default=None)
+    joined_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
+
+    session: Mapped["DraftSession"] = relationship(back_populates="members")
+    user: Mapped["User | None"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "user_id", name="uq_room_member_session_user"),
+    )
+
+
+class RoomActivityLog(Base):
+    """Activity log entry for a draft room."""
+
+    __tablename__ = "room_activity_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("draft_sessions.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), default=None
+    )
+    action_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
+    created_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
+
+    session: Mapped["DraftSession"] = relationship(back_populates="activity_log")
+    user: Mapped["User | None"] = relationship()
