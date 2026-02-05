@@ -1,9 +1,9 @@
 """SQLAlchemy ORM models."""
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String
-from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -17,17 +17,19 @@ class Player(Base):
 
     __tablename__ = "players"
 
-    id = Column(Integer, primary_key=True)
-    nba_player_id = Column(String(20), unique=True, nullable=False)
-    name = Column(String(100), nullable=False)
-    team = Column(String(50))
-    position = Column(String(10))
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nba_player_id: Mapped[str] = mapped_column(String(20), unique=True)
+    name: Mapped[str] = mapped_column(String(100))
+    team: Mapped[str | None] = mapped_column(String(50), default=None)
+    position: Mapped[str | None] = mapped_column(String(10), default=None)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        insert_default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
-    stats = relationship("PlayerGameStats", back_populates="player")
-    season_stats = relationship("PlayerSeasonStats", back_populates="player")
+    stats: Mapped[list["PlayerGameStats"]] = relationship(back_populates="player")
+    season_stats: Mapped[list["PlayerSeasonStats"]] = relationship(back_populates="player")
 
 
 class Game(Base):
@@ -35,19 +37,19 @@ class Game(Base):
 
     __tablename__ = "games"
 
-    id = Column(Integer, primary_key=True)
-    nba_game_id = Column(String(20), unique=True, nullable=False)
-    season = Column(String(10), nullable=False)
-    game_date = Column(Date, nullable=False)
-    home_team = Column(String(50), nullable=False)
-    away_team = Column(String(50), nullable=False)
-    home_score = Column(Integer)
-    away_score = Column(Integer)
-    winner = Column(String(50))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nba_game_id: Mapped[str] = mapped_column(String(20), unique=True)
+    season: Mapped[str] = mapped_column(String(10))
+    game_date: Mapped[date] = mapped_column()
+    home_team: Mapped[str] = mapped_column(String(50))
+    away_team: Mapped[str] = mapped_column(String(50))
+    home_score: Mapped[int | None] = mapped_column(default=None)
+    away_score: Mapped[int | None] = mapped_column(default=None)
+    winner: Mapped[str | None] = mapped_column(String(50), default=None)
+    created_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
 
-    stats = relationship("PlayerGameStats", back_populates="game")
-    predictions = relationship("GamePrediction", back_populates="game")
+    stats: Mapped[list["PlayerGameStats"]] = relationship(back_populates="game")
+    predictions: Mapped[list["GamePrediction"]] = relationship(back_populates="game")
 
 
 class PlayerGameStats(Base):
@@ -55,23 +57,23 @@ class PlayerGameStats(Base):
 
     __tablename__ = "player_game_stats"
 
-    id = Column(Integer, primary_key=True)
-    player_id = Column(Integer, ForeignKey("players.id"))
-    game_id = Column(Integer, ForeignKey("games.id"))
-    minutes = Column(Float)
-    points = Column(Integer)
-    rebounds = Column(Integer)
-    assists = Column(Integer)
-    steals = Column(Integer)
-    blocks = Column(Integer)
-    turnovers = Column(Integer)
-    fg_pct = Column(Float)
-    ft_pct = Column(Float)
-    three_pct = Column(Float)
-    fantasy_points = Column(Float)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id"), default=None)
+    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"), default=None)
+    minutes: Mapped[float | None] = mapped_column(default=None)
+    points: Mapped[int | None] = mapped_column(default=None)
+    rebounds: Mapped[int | None] = mapped_column(default=None)
+    assists: Mapped[int | None] = mapped_column(default=None)
+    steals: Mapped[int | None] = mapped_column(default=None)
+    blocks: Mapped[int | None] = mapped_column(default=None)
+    turnovers: Mapped[int | None] = mapped_column(default=None)
+    fg_pct: Mapped[float | None] = mapped_column(default=None)
+    ft_pct: Mapped[float | None] = mapped_column(default=None)
+    three_pct: Mapped[float | None] = mapped_column(default=None)
+    fantasy_points: Mapped[float | None] = mapped_column(default=None)
 
-    player = relationship("Player", back_populates="stats")
-    game = relationship("Game", back_populates="stats")
+    player: Mapped["Player"] = relationship(back_populates="stats")
+    game: Mapped["Game"] = relationship(back_populates="stats")
 
 
 class GamePrediction(Base):
@@ -79,15 +81,15 @@ class GamePrediction(Base):
 
     __tablename__ = "game_predictions"
 
-    id = Column(Integer, primary_key=True)
-    game_id = Column(Integer, ForeignKey("games.id"))
-    model_version = Column(String(50), nullable=False)
-    predicted_winner = Column(String(50), nullable=False)
-    win_probability = Column(Float, nullable=False)
-    shap_values = Column(String)  # JSON stored as string
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"), default=None)
+    model_version: Mapped[str] = mapped_column(String(50))
+    predicted_winner: Mapped[str] = mapped_column(String(50))
+    win_probability: Mapped[float] = mapped_column()
+    shap_values: Mapped[str | None] = mapped_column(default=None)  # JSON stored as string
+    created_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
 
-    game = relationship("Game", back_populates="predictions")
+    game: Mapped["Game"] = relationship(back_populates="predictions")
 
 
 class PlayerSeasonStats(Base):
@@ -99,35 +101,37 @@ class PlayerSeasonStats(Base):
 
     __tablename__ = "player_season_stats"
 
-    id = Column(Integer, primary_key=True)
-    player_id = Column(Integer, ForeignKey("players.id"))
-    season = Column(String(10), nullable=False)  # e.g., "2024-25"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id"), default=None)
+    season: Mapped[str] = mapped_column(String(10))  # e.g., "2024-25"
 
     # Games and minutes
-    games_played = Column(Integer, default=0)
-    minutes_per_game = Column(Float, default=0.0)
+    games_played: Mapped[int] = mapped_column(default=0)
+    minutes_per_game: Mapped[float] = mapped_column(default=0.0)
 
     # Per-game averages (9-category fantasy stats)
-    ppg = Column(Float, default=0.0)  # Points per game
-    rpg = Column(Float, default=0.0)  # Rebounds per game
-    apg = Column(Float, default=0.0)  # Assists per game
-    spg = Column(Float, default=0.0)  # Steals per game
-    bpg = Column(Float, default=0.0)  # Blocks per game
-    topg = Column(Float, default=0.0)  # Turnovers per game
-    fg_pct = Column(Float, default=0.0)  # Field goal percentage
-    ft_pct = Column(Float, default=0.0)  # Free throw percentage
-    three_pm = Column(Float, default=0.0)  # Three pointers made per game
+    ppg: Mapped[float] = mapped_column(default=0.0)  # Points per game
+    rpg: Mapped[float] = mapped_column(default=0.0)  # Rebounds per game
+    apg: Mapped[float] = mapped_column(default=0.0)  # Assists per game
+    spg: Mapped[float] = mapped_column(default=0.0)  # Steals per game
+    bpg: Mapped[float] = mapped_column(default=0.0)  # Blocks per game
+    topg: Mapped[float] = mapped_column(default=0.0)  # Turnovers per game
+    fg_pct: Mapped[float] = mapped_column(default=0.0)  # Field goal percentage
+    ft_pct: Mapped[float] = mapped_column(default=0.0)  # Free throw percentage
+    three_pm: Mapped[float] = mapped_column(default=0.0)  # Three pointers made per game
 
     # Additional useful stats
-    three_pct = Column(Float, default=0.0)  # Three point percentage
-    fga = Column(Float, default=0.0)  # Field goal attempts per game
-    fta = Column(Float, default=0.0)  # Free throw attempts per game
+    three_pct: Mapped[float] = mapped_column(default=0.0)  # Three point percentage
+    fga: Mapped[float] = mapped_column(default=0.0)  # Field goal attempts per game
+    fta: Mapped[float] = mapped_column(default=0.0)  # Free throw attempts per game
 
     # Player metadata at time of season
-    age = Column(Integer)
-    team = Column(String(10))
+    age: Mapped[int | None] = mapped_column(default=None)
+    team: Mapped[str | None] = mapped_column(String(10), default=None)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        insert_default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
-    player = relationship("Player", back_populates="season_stats")
+    player: Mapped["Player"] = relationship(back_populates="season_stats")

@@ -115,8 +115,8 @@ class XGBoostProjector:
         for stat in STAT_TARGETS:
             logger.info(f"Training model for {stat}...")
 
-            y_train = y.iloc[train_idx][stat].values
-            y_val = y.iloc[val_idx][stat].values
+            y_train = y.iloc[train_idx][stat].to_numpy()
+            y_val = y.iloc[val_idx][stat].to_numpy()
 
             # Create and train model
             model = xgb.XGBRegressor(**self.model_params)

@@ -324,6 +324,7 @@ class PlayerStatsService:
             stats.three_pct = float(row["three_pct"])
             stats.fga = float(row["fga"])
             stats.fta = float(row["fta"])
+            stats.team = row.get("TEAM")
 
             count += 1
 

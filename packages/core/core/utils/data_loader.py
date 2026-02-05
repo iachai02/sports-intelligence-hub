@@ -1,6 +1,7 @@
 """NBA data fetching with caching."""
 
 import time
+from typing import cast
 
 import diskcache
 import pandas as pd
@@ -27,7 +28,7 @@ class NBADataLoader:
         cache_key = f"games_{season}"
 
         if not force_refresh and cache_key in self.cache:
-            return self.cache[cache_key]
+            return cast(pd.DataFrame, self.cache[cache_key])
 
         # Rate limiting
         time.sleep(self.rate_limit_delay)
@@ -60,7 +61,7 @@ class NBADataLoader:
         cache_key = f"player_stats_{season}"
 
         if not force_refresh and cache_key in self.cache:
-            return self.cache[cache_key]
+            return cast(pd.DataFrame, self.cache[cache_key])
 
         time.sleep(self.rate_limit_delay)
 

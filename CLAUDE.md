@@ -22,9 +22,17 @@ Sports Intelligence Hub - an ML platform for NBA game predictions and fantasy dr
 - ✅ Taken Players Panel
 - ✅ Expandable player stats (9-cat grid)
 - ✅ Skip button for recommendations
-- ✅ 36 optimizer tests passing
+- ✅ 47 tests passing (core + optimizer)
 
-**Most Recent Session (2026-02-03) - Draft Room UI/UX Improvements:**
+**Most Recent Session (2026-02-03) - Simplified Affordability Filter:**
+
+Removed "unlikely" affordability tag. Now two-tier system:
+- **Affordable**: ≤40% of remaining budget
+- **Stretch**: >40% of remaining budget
+
+Files changed: `schemas.py`, `draft_room.py`, `draft_room.py` (API), `types.ts`, `RecommendationsPanel.tsx`
+
+**Previous Session (2026-02-03) - Draft Room UI/UX Improvements:**
 
 1. **Stable Prices (Issue 3)**: Use original `player.auction_value` instead of recalculating. Giannis now shows ~$74 even after drafting other stars.
 
@@ -202,6 +210,17 @@ composite = (
 - Shows best FPTS players regardless of category fit
 - Once ANY player drafted, full category analysis kicks in
 
+**Affordability Tags** (two-tier system):
+- `affordable`: ≤40% of remaining budget
+- `stretch`: >40% of remaining budget
+
+**Scoring Mode Weights:**
+| Mode | Fit | FPTS | Value | FPTS/$ |
+|------|-----|------|-------|--------|
+| balanced | 25% | 25% | 25% | 25% |
+| value | 20% | 20% | 20% | 40% |
+| production | 20% | 40% | 20% | 20% |
+
 ### CategoryAwareRecommendation Schema
 
 ```python
@@ -260,7 +279,7 @@ const [skippedPlayerIds, setSkippedPlayerIds] = useState<Set<string>>(new Set())
 
 After changes, verify:
 1. `make lint` passes
-2. `make test` passes (36 optimizer tests)
+2. `make test` passes (47 tests)
 3. `cd apps/web && npm run build` compiles
 
 Manual testing:
@@ -298,3 +317,28 @@ Manual testing:
 4. **Game predictor** - Use XGBoost classifier for game outcomes
 
 5. **LLM scouting reports** - Integrate Gemini API
+
+## Learning Session Notes (2026-02-04)
+
+The user completed a comprehensive walkthrough of all 9 layers with quizzes for each. Key clarifications made:
+
+**Architecture Understanding:**
+- Layer 1 entry point is `ingest_data.py` (CLI) → calls `player_stats_service.py` → calls `data_loader.py` (lowest level)
+- Caching with `diskcache` happens in `data_loader.py`, not the service layer
+- ORM relationships navigate between objects (`stats.player.name`), foreign keys are the actual database column links
+
+**Feature Engineering Clarifications:**
+- FG%/FT% bonuses use "total made over total attempted" (not percentage)
+- Age adjustment is only in auction value calculation, NOT in fantasy points (FPTS)
+- FPTS = pure statistical calculation; Auction Value = FPTS + external factors (age, games played, position scarcity)
+
+**ML Model Understanding:**
+- XGBoost uses **gradient boosting** (sequential trees correcting errors), NOT backpropagation
+- `trajectory_ppg` = `prev_ppg - prev2_ppg` (historical fact, not a prediction)
+- Need minimum 2 seasons: N-1 as features, N as target (feature vs target requirement)
+- 9 separate XGBoost models (one per stat category) for independent tuning
+
+**Infrastructure:**
+- Port 5001 for MLflow (not 5000) due to macOS AirPlay conflict
+- PostgreSQL uses standard port 5432
+- Docker Compose for local dev; AWS deployment uses separate configs
