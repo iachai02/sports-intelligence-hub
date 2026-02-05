@@ -2,8 +2,11 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import { DraftOptimizer } from './components/DraftOptimizer'
 import { DraftRoom } from './pages/DraftRoom'
 import { PlayerStats } from './pages/PlayerStats'
+import { AuthCallback } from './pages/AuthCallback'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { AuthProvider } from './contexts/AuthContext'
 import { ThemeToggle } from './components/ThemeToggle'
+import { AuthButton } from './components/AuthButton'
 
 function HomePage() {
   return (
@@ -11,7 +14,10 @@ function HomePage() {
       <div className="max-w-4xl mx-auto px-4">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-foreground">Sports Intelligence Hub</h1>
-          <ThemeToggle />
+          <div className="flex items-center gap-4">
+            <AuthButton />
+            <ThemeToggle />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -61,7 +67,10 @@ function OptimizerPage() {
           <Link to="/" className="text-accent hover:underline">
             &larr; Back to Home
           </Link>
-          <ThemeToggle />
+          <div className="flex items-center gap-4">
+            <AuthButton />
+            <ThemeToggle />
+          </div>
         </div>
         <DraftOptimizer />
       </div>
@@ -72,14 +81,17 @@ function OptimizerPage() {
 function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/optimizer" element={<OptimizerPage />} />
-          <Route path="/draft-room" element={<DraftRoom />} />
-          <Route path="/stats" element={<PlayerStats />} />
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/optimizer" element={<OptimizerPage />} />
+            <Route path="/draft-room" element={<DraftRoom />} />
+            <Route path="/stats" element={<PlayerStats />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </ThemeProvider>
   )
 }

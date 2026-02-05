@@ -1,8 +1,10 @@
 """SQLAlchemy ORM models."""
 
 from datetime import date, datetime
+from typing import Any
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -10,6 +12,24 @@ class Base(DeclarativeBase):
     """Base class for all models."""
 
     pass
+
+
+class User(Base):
+    """User account for authentication."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    name: Mapped[str | None] = mapped_column(String(100))
+    avatar_url: Mapped[str | None] = mapped_column()
+    oauth_provider: Mapped[str] = mapped_column(String(20), default="google")
+    oauth_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    preferences: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(insert_default=datetime.utcnow)
+    last_login: Mapped[datetime | None] = mapped_column()
+
+    __table_args__ = (UniqueConstraint("oauth_provider", "oauth_id"),)
 
 
 class Player(Base):

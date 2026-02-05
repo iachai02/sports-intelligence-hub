@@ -10,7 +10,7 @@ Sports Intelligence Hub - an ML platform for NBA game predictions and fantasy dr
 
 **Monorepo Structure:** Three packages in `packages/` + React frontend in `apps/web/`
 
-## Current Status: Theme System & Dark Mode Complete ✅
+## Current Status: Google OAuth Implemented ✅
 
 **Completed Features:**
 - ✅ Real NBA API integration (free, via `nba_api` library)
@@ -22,10 +22,78 @@ Sports Intelligence Hub - an ML platform for NBA game predictions and fantasy dr
 - ✅ Taken Players Panel
 - ✅ Expandable player stats (9-cat grid)
 - ✅ Skip button for recommendations
-- ✅ **Light/Dark Theme Toggle** with localStorage persistence
-- ✅ 47 tests passing (core + optimizer)
+- ✅ Light/Dark Theme Toggle with localStorage persistence
+- ✅ **Google OAuth Authentication** with PKCE flow
+- ✅ 67 tests passing
 
-**Most Recent Session (2026-02-04) - Theme System Implementation:**
+**Most Recent Session (2026-02-05) - Google OAuth Implementation:**
+
+Implemented Phase 1 of OAuth - Google authentication with Authorization Code Flow + PKCE.
+
+**Backend (FastAPI):**
+- `packages/api/api/auth/` module with config, jwt, oauth, dependencies
+- `packages/api/api/routers/auth.py` - Auth endpoints
+- `packages/core/core/db/models.py` - Added User model
+- JWT tokens stored in httpOnly cookies (`sports_hub_token`)
+- PKCE code verifier validation
+
+**Frontend (React):**
+- `src/contexts/AuthContext.tsx` - Auth state management
+- `src/hooks/useGoogleAuth.ts` - PKCE flow (code verifier/challenge generation)
+- `src/components/AuthButton.tsx` - Sign in/out button with avatar
+- `src/pages/AuthCallback.tsx` - OAuth callback handler
+- `src/lib/auth.ts` - API functions for auth
+
+**API Endpoints:**
+```
+POST /api/v1/auth/google   - Exchange code for JWT, set cookie
+GET  /api/v1/auth/me       - Get current user (requires auth)
+PATCH /api/v1/auth/me      - Update preferences
+POST /api/v1/auth/logout   - Clear cookie
+```
+
+**Environment Variables Required:**
+```bash
+# Backend .env
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+JWT_SECRET=<generate with: openssl rand -base64 32>
+
+# Frontend apps/web/.env
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+```
+
+**Google Cloud Console Setup:**
+1. Create OAuth 2.0 Client ID (Web application)
+2. Authorized JavaScript origins: `http://localhost:3001`
+3. Authorized redirect URIs: `http://localhost:3001/auth/callback`
+
+**Port Configuration:** Frontend runs on port 3001 (LeetCode Spaced Rep uses port 3000). Update Google Cloud Console if port changes.
+
+**OAuth Bugs Fixed (2026-02-05):**
+
+1. **Stale sessionStorage causing infinite loading spinner** (`AuthContext.tsx`):
+   - **Root cause:** When OAuth failed (e.g., wrong port, network error), `google_oauth_verifier` stayed in sessionStorage. On next page load, AuthContext saw it, thought OAuth was in progress, and never set `isLoading=false`.
+   - **Fix:** AuthContext now checks `window.location.pathname === '/auth/callback'`. If verifier exists but we're NOT on the callback page, it's stale — clean it up and proceed normally.
+
+2. **AuthCallback not cleaning sessionStorage on error paths** (`AuthCallback.tsx`):
+   - **Root cause:** If Google returned `?error=` or `?code` was missing, the component returned early without calling `handleCallback`, so the `finally` block never cleaned up sessionStorage.
+   - **Fix:** Error paths now explicitly remove `google_oauth_verifier` and `google_oauth_state` from sessionStorage.
+
+3. **React StrictMode double-execution breaking OAuth** (`AuthCallback.tsx`):
+   - **Root cause:** StrictMode fires effects twice in dev. First invocation processes the OAuth code and clears sessionStorage in `finally`. Second invocation finds empty storage → "Invalid state parameter".
+   - **Fix:** Added `useRef` guard (`processedRef`) so the callback only processes once.
+
+**Current OAuth Status:** The three bugs above are fixed. OAuth flow needs end-to-end testing — verify the backend `POST /api/v1/auth/google` exchange works with port 3001 redirect URI. The backend must also have the correct `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `JWT_SECRET` in its `.env`.
+
+**Next Steps:**
+- Verify OAuth end-to-end (sign in → callback → JWT cookie set → /auth/me returns user)
+- Database migration to create `users` table
+- Phase 2: Persist Draft Sessions to PostgreSQL
+
+---
+
+**Previous Session (2026-02-04) - Theme System Implementation:**
 
 Added full light/dark mode support across the entire app:
 
@@ -128,7 +196,7 @@ make lint                 # Run ruff + mypy
 
 # Web app
 cd apps/web && npm install
-cd apps/web && npm run dev   # Run React app at localhost:3000
+cd apps/web && npm run dev -- --port 3001  # Run React app at localhost:3001 (port 3000 is used by leetcode-spaced-rep)
 
 # Data ingestion (fetch real NBA stats)
 uv run python -m core.cli.ingest_data --seasons 2024-25
@@ -153,7 +221,9 @@ cd apps/web && npm run build  # Check TypeScript compiles
 sports-intelligence-hub/
 ├── packages/
 │   ├── core/                   # Shared library
-│   │   └── core/services/player_stats_service.py  # NBA data fetching
+│   │   └── core/
+│   │       ├── db/models.py              # SQLAlchemy models (User, Player, etc.)
+│   │       └── services/player_stats_service.py  # NBA data fetching
 │   ├── draft-optimizer/        # Fantasy draft optimization + ML
 │   │   └── draft_optimizer/
 │   │       ├── schemas.py      # CategoryAwareRecommendation (includes 9 stat fields)
@@ -162,16 +232,30 @@ sports-intelligence-hub/
 │   │       ├── real_data.py    # Load real NBA players from API
 │   │       └── ml/projector.py # XGBoost (not yet wired to draft room)
 │   └── api/
-│       └── api/routers/draft_room.py  # API endpoints with filter params
+│       └── api/
+│           ├── auth/                     # Authentication module
+│           │   ├── config.py             # Auth settings from env
+│           │   ├── jwt.py                # JWT creation/verification
+│           │   ├── oauth.py              # Google OAuth code exchange
+│           │   └── dependencies.py       # get_current_user dependency
+│           ├── routers/
+│           │   ├── auth.py               # Auth endpoints
+│           │   └── draft_room.py         # Draft room endpoints
+│           └── main.py                   # FastAPI app factory
 ├── apps/web/
 │   └── src/
 │       ├── contexts/
-│       │   └── ThemeContext.tsx          # Light/dark theme state + localStorage
+│       │   ├── ThemeContext.tsx          # Light/dark theme state
+│       │   └── AuthContext.tsx           # Auth state (user, login, logout)
+│       ├── hooks/
+│       │   └── useGoogleAuth.ts          # PKCE OAuth flow
 │       ├── pages/
 │       │   ├── DraftRoom.tsx             # Draft assistant page
-│       │   └── PlayerStats.tsx           # Player stats browser page
+│       │   ├── PlayerStats.tsx           # Player stats browser page
+│       │   └── AuthCallback.tsx          # OAuth callback handler
 │       ├── components/
 │       │   ├── ThemeToggle.tsx           # Sun/Moon toggle button
+│       │   ├── AuthButton.tsx            # Sign in/out with avatar
 │       │   ├── draft-room/
 │       │   │   ├── RecommendationsPanel.tsx
 │       │   │   ├── TakenPlayersPanel.tsx
@@ -184,8 +268,9 @@ sports-intelligence-hub/
 │       │       ├── PlayerDetailModal.tsx
 │       │       └── PlayerComparisonView.tsx
 │       ├── lib/
-│       │   ├── api.ts
-│       │   ├── types.ts
+│       │   ├── api.ts                    # Draft room API calls
+│       │   ├── auth.ts                   # Auth API calls
+│       │   ├── types.ts                  # TypeScript types (incl. User)
 │       │   └── utils.ts
 │       ├── index.css                     # Theme CSS variables (light/dark)
 │       └── tailwind.config.js            # Semantic color tokens
@@ -339,7 +424,7 @@ const [skippedPlayerIds, setSkippedPlayerIds] = useState<Set<string>>(new Set())
 
 After changes, verify:
 1. `make lint` passes
-2. `make test` passes (47 tests)
+2. `make test` passes (67 tests)
 3. `cd apps/web && npm run build` compiles
 
 Manual testing:
@@ -369,6 +454,15 @@ Manual testing:
 **Dark mode not applying to form elements:** Global CSS rules in `index.css` handle native form elements. Use `bg-input` class for custom input styling.
 
 **Theme not persisting:** Check localStorage key `sports-hub-theme`. ThemeContext applies `.dark` class to `document.documentElement`.
+
+**OAuth "Could not determine client ID":** The `load_dotenv()` must run BEFORE importing auth modules. Check `main.py` - `load_dotenv()` should be at the very top before other imports.
+
+**OAuth 400 Bad Request:** Check the response body for details. Common causes:
+- `invalid_grant` - Code already used or expired (codes are single-use)
+- `redirect_uri_mismatch` - Redirect URI doesn't match Google Console config
+- `invalid_client` - Wrong client ID or secret
+
+**OAuth UI flicker:** AuthContext checks `sessionStorage.getItem('google_oauth_verifier')` to detect OAuth in progress. If flicker occurs, the verifier may be getting cleared too early or the timing is off.
 
 ## Theme System Reference
 
@@ -418,32 +512,26 @@ import { ThemeToggle } from '../components/ThemeToggle';
 
 ---
 
-## Next Implementation: OAuth + Session Persistence
+## Next Implementation: Session Persistence (Phase 2)
 
-**Status:** PLANNED - Ready to implement
+**Status:** Phase 1 (OAuth) COMPLETE ✅ - Phase 2 ready to implement
 
-**Implementation Order:**
-1. Phase 1: Google OAuth with FastAPI
-2. Phase 2: Persist Draft Sessions to PostgreSQL
+### Phase 1: Google OAuth - COMPLETED
 
-### Technical Decisions Made
+See "Most Recent Session" section above for implementation details.
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| OAuth Provider | Google only (for now) | Most users have Google accounts; add GitHub later |
-| Auth Architecture | FastAPI backend | Full control, no external dependency, aligns with AWS learning goal |
-| User Profile | Extended | Email, name, avatar, preferences (theme, filters, notifications) |
-| Session Storage | PostgreSQL | Server-side persistence, survives browser clears, cross-device |
-| User Identity | Requires OAuth | No anonymous sessions; implement OAuth first |
-| Multi-session | Yes | Users can have multiple drafts (different leagues); future: real-time live drafts |
-| Data Capture | Comprehensive | Capture purchase prices, skip reasons for model improvement |
+**Key Files Created:**
+- `packages/api/api/auth/` - Backend auth module
+- `packages/api/api/routers/auth.py` - Auth endpoints
+- `packages/core/core/db/models.py` - User model added
+- `apps/web/src/contexts/AuthContext.tsx` - Frontend auth state
+- `apps/web/src/hooks/useGoogleAuth.ts` - PKCE OAuth flow
+- `apps/web/src/components/AuthButton.tsx` - Sign in/out UI
+- `apps/web/src/pages/AuthCallback.tsx` - OAuth callback
+- `apps/web/src/lib/auth.ts` - Auth API calls
 
-### Phase 1: Google OAuth with FastAPI
-
-**Database Schema (new tables):**
-
+**Database Migration Needed:**
 ```sql
--- Users table
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -451,58 +539,11 @@ CREATE TABLE users (
     avatar_url TEXT,
     oauth_provider VARCHAR(20) NOT NULL DEFAULT 'google',
     oauth_id VARCHAR(100) NOT NULL,
-    preferences JSONB DEFAULT '{}',  -- theme, default filters, notifications
+    preferences JSONB DEFAULT '{}',
     created_at TIMESTAMP DEFAULT NOW(),
     last_login TIMESTAMP,
     UNIQUE(oauth_provider, oauth_id)
 );
-```
-
-**Backend Endpoints (FastAPI):**
-
-```
-POST /api/v1/auth/google      - Exchange Google auth code for JWT
-GET  /api/v1/auth/me          - Get current user profile
-PATCH /api/v1/auth/me         - Update user preferences
-POST /api/v1/auth/logout      - Invalidate session
-```
-
-**Security:**
-- JWT tokens stored in httpOnly cookies (secure, not accessible to JS)
-- CSRF protection for state-changing requests
-- Token refresh mechanism
-
-**Frontend:**
-- Google Sign-In button using `@react-oauth/google`
-- AuthContext for managing logged-in state
-- Protected routes requiring authentication
-
-**Files to Create/Modify:**
-
-```
-packages/api/api/
-├── auth/
-│   ├── __init__.py
-│   ├── oauth.py          # Google OAuth logic
-│   ├── jwt.py            # Token generation/validation
-│   └── dependencies.py   # get_current_user dependency
-├── routers/
-│   └── auth.py           # Auth endpoints
-└── main.py               # Add auth router
-
-packages/core/core/
-└── db/
-    └── models.py         # Add User model
-
-apps/web/src/
-├── contexts/
-│   └── AuthContext.tsx   # Auth state management
-├── components/
-│   └── AuthButton.tsx    # Google sign-in button
-├── hooks/
-│   └── useAuth.ts        # Auth utilities
-└── lib/
-    └── auth.ts           # Auth API calls
 ```
 
 ### Phase 2: Persist Draft Sessions

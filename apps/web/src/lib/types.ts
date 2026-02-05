@@ -204,3 +204,21 @@ export interface PlayerStatsFilters {
   page: number;
   perPage: number;
 }
+
+// Authentication Types
+
+export interface User {
+  id: number;
+  email: string;
+  name: string | null;
+  avatar_url: string | null;
+  preferences: UserPreferences;
+  created_at: string;
+}
+
+export interface UserPreferences {
+  theme?: 'light' | 'dark';
+  defaultScoringMode?: 'balanced' | 'value' | 'production';
+  defaultPosition?: string;
+  notifications?: boolean;
+}

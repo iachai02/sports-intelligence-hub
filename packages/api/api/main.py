@@ -1,13 +1,14 @@
 """FastAPI application factory."""
 
+# Load environment variables BEFORE importing modules that use them
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import draft, draft_room, health, players
-
-# Load environment variables from .env file
-load_dotenv()
+from api.routers import auth, draft, draft_room, health, players
 
 
 def create_app() -> FastAPI:
@@ -21,7 +22,7 @@ def create_app() -> FastAPI:
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],  # React dev server
+        allow_origins=["http://localhost:3001"],  # React dev server (port 3001, 3000 used by leetcode-spaced-rep)
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
 
     # Register routers
     app.include_router(health.router, tags=["health"])
+    app.include_router(auth.router, tags=["auth"])
     app.include_router(draft.router, tags=["draft"])
     app.include_router(draft_room.router, tags=["draft-room"])
     app.include_router(players.router, tags=["players"])
