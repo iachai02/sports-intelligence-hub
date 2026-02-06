@@ -75,6 +75,106 @@ class NBADataLoader:
         self.cache.set(cache_key, stats, expire=86400)
         return stats
 
+    def get_player_bio_stats(
+        self, season: str, force_refresh: bool = False
+    ) -> pd.DataFrame:
+        """
+        Fetch player bio/demographic stats for a season.
+
+        Returns age, height, weight, draft info, USG%, TS%, NET_RATING,
+        AST%, OREB%, DREB% for all players in a single API call.
+
+        Args:
+            season: Season string like "2024-25"
+            force_refresh: If True, bypass cache
+
+        Returns:
+            DataFrame with player bio and advanced stats
+        """
+        cache_key = f"player_bio_{season}"
+
+        if not force_refresh and cache_key in self.cache:
+            return cast(pd.DataFrame, self.cache[cache_key])
+
+        time.sleep(self.rate_limit_delay)
+
+        from nba_api.stats.endpoints import leaguedashplayerbiostats
+
+        bio = leaguedashplayerbiostats.LeagueDashPlayerBioStats(
+            season=season,
+            league_id="00",
+            per_mode_simple="PerGame",
+        ).get_data_frames()[0]
+
+        self.cache.set(cache_key, bio, expire=86400)
+        return bio
+
+    def get_player_estimated_metrics(
+        self, season: str, force_refresh: bool = False
+    ) -> pd.DataFrame:
+        """
+        Fetch player estimated advanced metrics for a season.
+
+        Returns E_USG_PCT, E_PACE, E_OFF_RATING, E_DEF_RATING,
+        E_NET_RATING, E_TOV_PCT for all players in a single API call.
+
+        Args:
+            season: Season string like "2024-25"
+            force_refresh: If True, bypass cache
+
+        Returns:
+            DataFrame with player estimated metrics
+        """
+        cache_key = f"player_estimated_{season}"
+
+        if not force_refresh and cache_key in self.cache:
+            return cast(pd.DataFrame, self.cache[cache_key])
+
+        time.sleep(self.rate_limit_delay)
+
+        from nba_api.stats.endpoints import playerestimatedmetrics
+
+        metrics = playerestimatedmetrics.PlayerEstimatedMetrics(
+            season=season,
+            league_id="00",
+        ).get_data_frames()[0]
+
+        self.cache.set(cache_key, metrics, expire=86400)
+        return metrics
+
+    def get_team_estimated_metrics(
+        self, season: str, force_refresh: bool = False
+    ) -> pd.DataFrame:
+        """
+        Fetch team estimated metrics for a season.
+
+        Returns team pace, offensive/defensive rating for all teams
+        in a single API call.
+
+        Args:
+            season: Season string like "2024-25"
+            force_refresh: If True, bypass cache
+
+        Returns:
+            DataFrame with team estimated metrics
+        """
+        cache_key = f"team_estimated_{season}"
+
+        if not force_refresh and cache_key in self.cache:
+            return cast(pd.DataFrame, self.cache[cache_key])
+
+        time.sleep(self.rate_limit_delay)
+
+        from nba_api.stats.endpoints import teamestimatedmetrics
+
+        metrics = teamestimatedmetrics.TeamEstimatedMetrics(
+            season=season,
+            league_id="00",
+        ).get_data_frames()[0]
+
+        self.cache.set(cache_key, metrics, expire=86400)
+        return metrics
+
     def clear_cache(self) -> None:
         """Clear all cached data."""
         self.cache.clear()

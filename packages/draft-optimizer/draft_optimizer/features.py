@@ -175,16 +175,18 @@ def calculate_auction_value_v2(
     budget_per_team: float = 200.0,
     games_played: int | None = None,
     age: int | None = None,
+    avg_games_played: float | None = None,
+    games_played_trend: float | None = None,
 ) -> float:
-    """Z-score based auction value calculation with games played and age adjustments.
+    """Z-score based auction value calculation with durability and age adjustments.
 
-    This improved method:
+    This method:
     1. Identifies draftable pool (top N players where N = teams × roster)
-    2. Uses percentile-based value assignment
-    3. Maps percentiles to $ values ensuring total ≈ league budget
-    4. Applies position scarcity multiplier
-    5. Adjusts value based on games played (injury risk)
-    6. **NEW**: Adjusts value based on age (decline risk)
+    2. Uses percentile-based value assignment with exponential decay
+    3. Applies position scarcity multiplier
+    4. Adjusts for durability using multi-season average games played
+    5. Applies games-played trajectory penalty (trending down = worse)
+    6. Applies exponential age-decline curve for players 33+
 
     The value distribution follows real auction patterns:
     - Top ~3% of players: $50-75 (elite tier)
@@ -199,8 +201,13 @@ def calculate_auction_value_v2(
         num_teams: Number of teams in the league
         roster_size: Number of roster spots per team
         budget_per_team: Auction budget per team
-        games_played: Number of games played (for durability adjustment)
+        games_played: Most recent season games played (durability signal)
         age: Player's age in years (for decline risk adjustment)
+        avg_games_played: Multi-season average games played (stronger durability
+            signal — captures chronic injury-proneness like AD). Falls back to
+            games_played if not provided.
+        games_played_trend: Change in games played from prior season to current
+            (negative = trending toward fewer games = extra penalty).
 
     Returns:
         Auction value in dollars (minimum $1, max ~$75)
@@ -227,68 +234,74 @@ def calculate_auction_value_v2(
     percentile = rank / pool_size
 
     # Value curve: use exponential decay so elite players get premium
-    # Formula: value = base + (max_premium * exp(-decay * percentile))
-    # This creates a steep drop-off for top players
-
-    # Parameters tuned for realistic auction values:
-    # - Top player (percentile=0): ~$70
-    # - Top 5% (percentile=0.05): ~$50
-    # - Top 25% (percentile=0.25): ~$20
-    # - Median (percentile=0.5): ~$10
-    # - Bottom quartile (percentile=0.75): ~$3
-
-    base_value = 1.0  # Minimum for worst draftable player
-    max_premium = 74.0  # Maximum additional value for best player
-    decay_rate = 5.0  # Controls steepness of the curve (higher = steeper drop-off)
+    base_value = 1.0
+    max_premium = 74.0
+    decay_rate = 5.0
 
     raw_value = base_value + max_premium * math.exp(-decay_rate * percentile)
 
     # Apply position scarcity multiplier (subtle effect)
     if position is not None:
         scarcity = POSITION_SCARCITY.get(position, 1.0)
-        # Only apply partial scarcity to avoid over-inflating
         raw_value = raw_value * (0.9 + 0.1 * scarcity)
 
-    # Games played adjustment (durability factor)
-    # A player who plays 65+ games gets full value
-    # A player who plays 40 games gets ~70% value
-    # A player who plays 20 games gets ~50% value
-    # This penalizes injury-prone players like Robert Williams
-    if games_played is not None:
-        full_season_games = 65  # ~80% of 82 games = healthy season
-        min_games_factor = 0.4  # Floor at 40% value even with very few games
+    # ── Durability adjustment (multi-season aware) ──
+    # Use multi-season average GP if available (captures chronic injury-proneness),
+    # otherwise fall back to single-season GP.
+    # 70+ games = full value, 55 games ≈ 80%, 40 games ≈ 60%, 20 games ≈ 40%
+    gp_signal = avg_games_played if avg_games_played is not None else (
+        float(games_played) if games_played is not None else None
+    )
 
-        # games_factor ranges from min_games_factor to 1.0
-        if games_played >= full_season_games:
+    if gp_signal is not None:
+        full_season_games = 70  # Healthy season threshold (stricter than before)
+        min_games_factor = 0.30  # Floor at 30% value
+
+        if gp_signal >= full_season_games:
             games_factor = 1.0
         else:
-            # Scale from min_games_factor at 0 games to 1.0 at full_season_games
-            games_ratio = games_played / full_season_games
-            games_factor = min_games_factor + (1.0 - min_games_factor) * games_ratio
+            # Quadratic scaling — penalizes low GP more aggressively than linear
+            # 55 GP: (55/70)^1.3 ≈ 0.71 → factor ≈ 0.30 + 0.70*0.71 = 0.80
+            # 40 GP: (40/70)^1.3 ≈ 0.47 → factor ≈ 0.30 + 0.70*0.47 = 0.63
+            # 20 GP: (20/70)^1.3 ≈ 0.19 → factor ≈ 0.30 + 0.70*0.19 = 0.43
+            games_ratio = gp_signal / full_season_games
+            scaled_ratio = math.pow(min(games_ratio, 1.0), 1.3)
+            games_factor = min_games_factor + (1.0 - min_games_factor) * scaled_ratio
 
         raw_value = raw_value * games_factor
 
-    # Age adjustment (decline risk factor)
-    # Players 33+ start getting penalized for expected decline
-    # - Age 33: 95% value (slight risk)
-    # - Age 35: 85% value (moderate risk)
-    # - Age 37: 70% value (high risk)
-    # - Age 40: 55% value (very high risk - e.g., LeBron)
-    # This reflects that older players may decline mid-season or get rested
+    # ── Games-played trajectory penalty ──
+    # If a player's GP is trending down year-over-year, apply an extra penalty.
+    # A player going from 75→55 GP (-20) is a bigger red flag than steady 55 GP.
+    if games_played_trend is not None and games_played_trend < -5:
+        # Only penalize meaningful declines (>5 game drop)
+        # -10 games: 3% penalty, -20 games: 6% penalty, -30 games: 9% (capped)
+        trend_penalty = min(0.09, abs(games_played_trend + 5) * 0.003)
+        raw_value = raw_value * (1.0 - trend_penalty)
+
+    # ── Age adjustment (exponential decline curve) ──
+    # Exponential curve gives moderate penalties early (33-35), steep penalties
+    # late (38+). Reflects that decline accelerates with age.
+    #
+    # Approximate values:
+    # - Age 33: 93% value
+    # - Age 35: 80% value
+    # - Age 37: 63% value
+    # - Age 39: 45% value
+    # - Age 40: 38% value (LeBron range)
+    # - Floor: 30%
     if age is not None:
-        prime_age_cutoff = 33  # Players under 33 get full value
+        prime_age_cutoff = 33
         if age < prime_age_cutoff:
             age_factor = 1.0
         else:
-            # 5% penalty per year over 33, with a floor of 50%
             years_over_prime = age - prime_age_cutoff
-            age_factor = max(0.50, 1.0 - (years_over_prime * 0.05))
+            # Exponential decay: 0.9^years gives ~0.93 at 1yr, ~0.73 at 3yr, ~0.48 at 7yr
+            age_factor = max(0.30, math.pow(0.9, years_over_prime))
 
         raw_value = raw_value * age_factor
 
     # Apply floor and ceiling
-    # Floor: $1 minimum
-    # Ceiling: ~$75 (no single player should consume >37.5% of budget)
     value = max(1.0, min(round(raw_value, 0), 75.0))
 
     return value

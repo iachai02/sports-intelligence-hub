@@ -233,6 +233,146 @@ class TestLeagueBudgetCalibration:
         assert bench >= 40, f"Too few bench players: {bench}"
 
 
+class TestAgePenalty:
+    """Test exponential age decline curve."""
+
+    @pytest.fixture
+    def fpts_pool(self) -> list[float]:
+        return [50, 45, 40, 35, 30, 25, 20, 15] * 20
+
+    def test_young_player_no_penalty(self, fpts_pool):
+        """Players under 33 get full value."""
+        value_25 = calculate_auction_value_v2(
+            projected_fpts=50.0, all_player_fpts=fpts_pool, age=25
+        )
+        value_no_age = calculate_auction_value_v2(
+            projected_fpts=50.0, all_player_fpts=fpts_pool
+        )
+        assert value_25 == value_no_age
+
+    def test_age_34_mild_penalty(self, fpts_pool):
+        """Age 34 (1 year over prime) should get a mild penalty (~10%)."""
+        value_32 = calculate_auction_value_v2(
+            projected_fpts=45.0, all_player_fpts=fpts_pool, age=32
+        )
+        value_34 = calculate_auction_value_v2(
+            projected_fpts=45.0, all_player_fpts=fpts_pool, age=34
+        )
+        assert value_34 < value_32
+
+    def test_age_37_significant_penalty(self, fpts_pool):
+        """Age 37 should be significantly discounted (~37%)."""
+        value_full = calculate_auction_value_v2(
+            projected_fpts=50.0, all_player_fpts=fpts_pool, age=25
+        )
+        value_37 = calculate_auction_value_v2(
+            projected_fpts=50.0, all_player_fpts=fpts_pool, age=37
+        )
+        # 0.9^4 ≈ 0.656, so ~34% discount
+        assert value_37 < value_full * 0.75
+
+    def test_lebron_age_40_heavy_penalty(self, fpts_pool):
+        """Age 40 (LeBron) should get heavy penalty — value roughly halved."""
+        value_full = calculate_auction_value_v2(
+            projected_fpts=55.0, all_player_fpts=fpts_pool, age=25
+        )
+        value_40 = calculate_auction_value_v2(
+            projected_fpts=55.0, all_player_fpts=fpts_pool, age=40
+        )
+        # 0.9^7 ≈ 0.478, so ~52% discount → value should be roughly halved
+        assert value_40 <= value_full * 0.55
+        # LeBron-like: raw ~$70 * 0.48 ≈ $33-35 range (moderate correction)
+        assert value_40 <= 40
+
+    def test_age_penalty_floor(self, fpts_pool):
+        """Age penalty should floor at 30%."""
+        value_45 = calculate_auction_value_v2(
+            projected_fpts=50.0, all_player_fpts=fpts_pool, age=45
+        )
+        value_50 = calculate_auction_value_v2(
+            projected_fpts=50.0, all_player_fpts=fpts_pool, age=50
+        )
+        # Both should hit the 30% floor
+        assert value_45 == value_50
+
+
+class TestDurabilityPenalty:
+    """Test multi-season games played and trend adjustments."""
+
+    @pytest.fixture
+    def fpts_pool(self) -> list[float]:
+        return [50, 45, 40, 35, 30, 25, 20, 15] * 20
+
+    def test_healthy_player_no_penalty(self, fpts_pool):
+        """70+ games = full value."""
+        value = calculate_auction_value_v2(
+            projected_fpts=50.0, all_player_fpts=fpts_pool, games_played=75
+        )
+        value_no_gp = calculate_auction_value_v2(
+            projected_fpts=50.0, all_player_fpts=fpts_pool
+        )
+        assert value == value_no_gp
+
+    def test_multi_season_avg_used_over_single(self, fpts_pool):
+        """Multi-season avg (if provided) should be the durability signal."""
+        # Single season: 70 games (healthy), but multi-season avg: 55 (injury prone)
+        value_avg = calculate_auction_value_v2(
+            projected_fpts=50.0,
+            all_player_fpts=fpts_pool,
+            games_played=70,
+            avg_games_played=55.0,
+        )
+        value_single = calculate_auction_value_v2(
+            projected_fpts=50.0,
+            all_player_fpts=fpts_pool,
+            games_played=70,
+        )
+        # Multi-season avg of 55 should result in lower value than single season of 70
+        assert value_avg < value_single
+
+    def test_ad_chronic_injury(self, fpts_pool):
+        """AD-like: ~55 GP avg over multiple years should get meaningful discount."""
+        value_healthy = calculate_auction_value_v2(
+            projected_fpts=55.0, all_player_fpts=fpts_pool, avg_games_played=75.0
+        )
+        value_ad = calculate_auction_value_v2(
+            projected_fpts=55.0, all_player_fpts=fpts_pool, avg_games_played=55.0
+        )
+        # AD should be at least 15% cheaper than a healthy player with same stats
+        assert value_ad < value_healthy * 0.85
+
+    def test_gp_trend_penalty(self, fpts_pool):
+        """Declining GP trend should add extra penalty on top of avg GP."""
+        value_steady = calculate_auction_value_v2(
+            projected_fpts=50.0,
+            all_player_fpts=fpts_pool,
+            avg_games_played=60.0,
+            games_played_trend=0.0,
+        )
+        value_declining = calculate_auction_value_v2(
+            projected_fpts=50.0,
+            all_player_fpts=fpts_pool,
+            avg_games_played=60.0,
+            games_played_trend=-20.0,
+        )
+        assert value_declining < value_steady
+
+    def test_small_gp_drop_no_penalty(self, fpts_pool):
+        """A small GP drop (<=5 games) should NOT trigger trend penalty."""
+        value_stable = calculate_auction_value_v2(
+            projected_fpts=50.0,
+            all_player_fpts=fpts_pool,
+            avg_games_played=60.0,
+            games_played_trend=-3.0,
+        )
+        value_no_trend = calculate_auction_value_v2(
+            projected_fpts=50.0,
+            all_player_fpts=fpts_pool,
+            avg_games_played=60.0,
+        )
+        assert value_stable == value_no_trend
+
+
 class TestBatchProjections:
     """Test batch projection calculation with pool-aware values."""
 

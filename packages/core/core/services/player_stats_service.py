@@ -246,6 +246,281 @@ class PlayerStatsService:
 
         return season_avgs
 
+    def get_enhanced_projection_data(
+        self,
+        seasons: list[str] | None = None,
+        min_games: int = 20,
+        force_refresh: bool = False,
+    ) -> pd.DataFrame:
+        """Return player data with advanced stats for enhanced ML training.
+
+        Fetches base stats, player bio/demographics, player estimated metrics,
+        and team estimated metrics, then joins them all together.
+
+        Args:
+            seasons: Seasons to fetch (defaults to last 5 seasons)
+            min_games: Minimum games played to include a player-season
+            force_refresh: If True, bypass cache
+
+        Returns:
+            DataFrame with season averages + advanced stats for qualifying player-seasons
+        """
+        if seasons is None:
+            seasons = ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25"]
+
+        # Step 1: Get base projection-ready data
+        base_data = self.get_projection_ready_data(
+            seasons=seasons,
+            min_games=min_games,
+            force_refresh=force_refresh,
+        )
+
+        if base_data.empty:
+            return base_data
+
+        # Step 2: Fetch advanced + demographic data for each season
+        bio_frames: list[pd.DataFrame] = []
+        player_est_frames: list[pd.DataFrame] = []
+        team_est_frames: list[pd.DataFrame] = []
+
+        for season in seasons:
+            # Player bio stats (age, height, weight, draft info)
+            try:
+                bio = self.loader.get_player_bio_stats(
+                    season=season, force_refresh=force_refresh
+                )
+                bio["SEASON"] = season
+                bio_frames.append(bio)
+            except Exception as e:
+                logger.warning(f"Failed to fetch bio stats for {season}: {e}")
+
+            # Player estimated metrics (USG%, OFF/DEF rating, etc.)
+            try:
+                player_est = self.loader.get_player_estimated_metrics(
+                    season=season, force_refresh=force_refresh
+                )
+                player_est["SEASON"] = season
+                player_est_frames.append(player_est)
+            except Exception as e:
+                logger.warning(f"Failed to fetch player estimated metrics for {season}: {e}")
+
+            # Team estimated metrics (pace, OFF/DEF rating per team)
+            try:
+                team_est = self.loader.get_team_estimated_metrics(
+                    season=season, force_refresh=force_refresh
+                )
+                team_est["SEASON"] = season
+                team_est_frames.append(team_est)
+            except Exception as e:
+                logger.warning(f"Failed to fetch team estimated metrics for {season}: {e}")
+
+        # Step 3: Merge bio data
+        if bio_frames:
+            all_bio = pd.concat(bio_frames, ignore_index=True)
+            # Select columns we need and rename for clarity
+            bio_cols = ["PLAYER_ID", "SEASON"]
+            col_mapping: dict[str, str] = {}
+            for col in [
+                "PLAYER_HEIGHT_INCHES",
+                "PLAYER_WEIGHT",
+                "DRAFT_ROUND",
+                "DRAFT_NUMBER",
+                "AGE",
+                "USG_PCT",
+                "TS_PCT",
+                "NET_RATING",
+                "AST_PCT",
+                "OREB_PCT",
+                "DREB_PCT",
+            ]:
+                if col in all_bio.columns:
+                    bio_cols.append(col)
+                    col_mapping[col] = col.lower()
+
+            # Some endpoints use PLAYER_HEIGHT instead of PLAYER_HEIGHT_INCHES
+            if "PLAYER_HEIGHT_INCHES" not in all_bio.columns and "PLAYER_HEIGHT" in all_bio.columns:
+                # Convert height string like "6-10" to inches
+                def height_to_inches(h: object) -> float | None:
+                    if pd.isna(h) or h is None:
+                        return None
+                    h_str = str(h)
+                    if "-" in h_str:
+                        parts = h_str.split("-")
+                        try:
+                            return float(parts[0]) * 12 + float(parts[1])
+                        except (ValueError, IndexError):
+                            return None
+                    try:
+                        return float(h_str)
+                    except ValueError:
+                        return None
+
+                all_bio["PLAYER_HEIGHT_INCHES"] = all_bio["PLAYER_HEIGHT"].apply(
+                    height_to_inches
+                )
+                if "PLAYER_HEIGHT_INCHES" not in bio_cols:
+                    bio_cols.append("PLAYER_HEIGHT_INCHES")
+                    col_mapping["PLAYER_HEIGHT_INCHES"] = "player_height_inches"
+
+            available_bio_cols = [c for c in bio_cols if c in all_bio.columns]
+            bio_subset = all_bio[available_bio_cols].copy()
+            bio_subset = bio_subset.rename(
+                columns={k: v for k, v in col_mapping.items() if k in bio_subset.columns}
+            )
+
+            base_data = base_data.merge(
+                bio_subset,
+                on=["PLAYER_ID", "SEASON"],
+                how="left",
+            )
+
+        # Step 4: Merge player estimated metrics
+        if player_est_frames:
+            all_player_est = pd.concat(player_est_frames, ignore_index=True)
+            est_cols = ["PLAYER_ID", "SEASON"]
+            est_col_mapping: dict[str, str] = {}
+            for col in [
+                "E_USG_PCT",
+                "E_PACE",
+                "E_OFF_RATING",
+                "E_DEF_RATING",
+                "E_NET_RATING",
+                "E_TOV_PCT",
+            ]:
+                if col in all_player_est.columns:
+                    est_cols.append(col)
+                    est_col_mapping[col] = col.lower()
+
+            available_est_cols = [c for c in est_cols if c in all_player_est.columns]
+            est_subset = all_player_est[available_est_cols].copy()
+            est_subset = est_subset.rename(
+                columns={k: v for k, v in est_col_mapping.items() if k in est_subset.columns}
+            )
+
+            base_data = base_data.merge(
+                est_subset,
+                on=["PLAYER_ID", "SEASON"],
+                how="left",
+            )
+
+        # Step 5: Merge team estimated metrics
+        # Note: TeamEstimatedMetrics returns TEAM_ID + TEAM_NAME but NOT
+        # TEAM_ABBREVIATION, so we map TEAM_ID → abbreviation via nba_api static data.
+        if team_est_frames:
+            all_team_est = pd.concat(team_est_frames, ignore_index=True)
+
+            # Build TEAM_ID → abbreviation lookup
+            if "TEAM_ID" in all_team_est.columns:
+                from nba_api.stats.static import teams as nba_teams
+
+                team_id_to_abbr = {
+                    t["id"]: t["abbreviation"] for t in nba_teams.get_teams()
+                }
+                all_team_est["TEAM_ABBREVIATION"] = (
+                    all_team_est["TEAM_ID"].map(team_id_to_abbr)
+                )
+
+            team_cols = ["TEAM_ABBREVIATION", "SEASON"]
+            team_col_mapping: dict[str, str] = {}
+            for col in ["E_PACE", "E_OFF_RATING", "E_DEF_RATING"]:
+                team_col_name = f"TEAM_{col}"
+                if col in all_team_est.columns:
+                    all_team_est = all_team_est.rename(columns={col: team_col_name})
+                    team_cols.append(team_col_name)
+                    team_col_mapping[team_col_name] = f"team_{col.lower()}"
+
+            available_team_cols = [c for c in team_cols if c in all_team_est.columns]
+            team_subset = all_team_est[available_team_cols].copy()
+            team_subset = team_subset.rename(
+                columns={
+                    "TEAM_ABBREVIATION": "TEAM",
+                    **{k: v for k, v in team_col_mapping.items() if k in team_subset.columns},
+                }
+            )
+
+            base_data = base_data.merge(
+                team_subset,
+                on=["TEAM", "SEASON"],
+                how="left",
+            )
+
+        # Step 6: Detect team changes between consecutive seasons per player
+        base_data = base_data.sort_values(["PLAYER_ID", "SEASON"])
+        base_data["prev_team"] = base_data.groupby("PLAYER_ID")["TEAM"].shift(1)
+        base_data["changed_team"] = (
+            (base_data["prev_team"].notna())
+            & (base_data["TEAM"] != base_data["prev_team"])
+        ).astype(int)
+        base_data = base_data.drop(columns=["prev_team"])
+
+        # Step 7: Compute season_exp (years since draft — approximate from seasons in data)
+        if "draft_number" in base_data.columns:
+            # season_exp = seasons of NBA experience (from first season in dataset per player)
+            first_season = (
+                base_data.groupby("PLAYER_ID")["SEASON"]
+                .min()
+                .reset_index()
+                .rename(columns={"SEASON": "first_season"})
+            )
+            base_data = base_data.merge(first_season, on="PLAYER_ID", how="left")
+
+            def season_to_year(s: str) -> int:
+                try:
+                    return int(s.split("-")[0])
+                except (ValueError, IndexError):
+                    return 0
+
+            base_data["season_exp"] = base_data.apply(
+                lambda r: season_to_year(str(r["SEASON"])) - season_to_year(str(r["first_season"])),
+                axis=1,
+            )
+            base_data = base_data.drop(columns=["first_season"])
+        else:
+            base_data["season_exp"] = 0
+
+        # Step 8: Fill missing advanced stats with per-season league averages
+        advanced_cols = [
+            c
+            for c in base_data.columns
+            if c
+            in {
+                "usg_pct",
+                "ts_pct",
+                "net_rating",
+                "ast_pct",
+                "oreb_pct",
+                "dreb_pct",
+                "e_usg_pct",
+                "e_pace",
+                "e_off_rating",
+                "e_def_rating",
+                "e_net_rating",
+                "e_tov_pct",
+                "team_e_pace",
+                "team_e_off_rating",
+                "team_e_def_rating",
+                "player_height_inches",
+                "player_weight",
+                "age",
+                "draft_round",
+                "draft_number",
+            }
+        ]
+
+        for col in advanced_cols:
+            if base_data[col].isna().any():
+                season_means = base_data.groupby("SEASON")[col].transform("mean")
+                base_data[col] = base_data[col].fillna(season_means)
+                # If still NaN (entire season missing), fill with global mean
+                base_data[col] = base_data[col].fillna(base_data[col].mean())
+
+        logger.info(
+            f"Enhanced projection data: {len(base_data)} player-seasons, "
+            f"{len(base_data.columns)} columns"
+        )
+
+        return base_data
+
     def store_season_stats(
         self,
         season_avgs: pd.DataFrame,

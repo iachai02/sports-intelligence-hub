@@ -10,185 +10,93 @@ Sports Intelligence Hub - an ML platform for NBA game predictions and fantasy dr
 
 **Monorepo Structure:** Three packages in `packages/` + React frontend in `apps/web/`
 
-## Current Status: XGBoost Projections Wired Up ✅
+## Current Status: Enhanced Projection Model ✅
 
 **Completed Features:**
 - ✅ Real NBA API integration (free, via `nba_api` library)
-- ✅ Auction value calculation with age, games played, and volume adjustments
-- ✅ XGBoost projection model trained on 3 seasons of real data
+- ✅ **Enhanced projection pipeline** — ~61 features (demographics, advanced stats, team context, derived metrics), up from 33
+- ✅ **Auction value with age/durability adjustments** — exponential age decline (0.9^years_over_33), multi-season GP average, GP trend penalty
+- ✅ **Mid-season blending** — blends XGBoost projection with current-season actuals (weight = min(0.85, games/50))
+- ✅ **3 new NBA API endpoints** — `LeagueDashPlayerBioStats`, `PlayerEstimatedMetrics`, `TeamEstimatedMetrics`
+- ✅ XGBoost projection model trained on 3 seasons of real data (model in `models/player_projector/`)
 - ✅ **XGBoost projections wired to Draft Room + Player Stats** — season/view toggle (2022-23, 2023-24, 2024-25 actuals or 2025-26 projected)
 - ✅ Category-Aware Recommendations with filters and scoring modes
 - ✅ Search Typeahead with 300ms debounce and request cancellation
-- ✅ Taken Players Panel
-- ✅ Expandable player stats (9-cat grid)
+- ✅ Taken Players Panel, Expandable player stats (9-cat grid)
 - ✅ Light/Dark Theme Toggle with localStorage persistence
-- ✅ **Google OAuth Authentication** with PKCE flow (Phase 1)
-- ✅ **Draft Session Persistence to PostgreSQL** (Phase 2)
+- ✅ **Google OAuth Authentication** with PKCE flow
+- ✅ **Draft Session Persistence to PostgreSQL**
 - ✅ Alembic migration infrastructure
 - ✅ Session picker UI (create, resume, delete sessions)
 - ✅ Auth-gated Draft Room (must sign in to access)
 - ✅ Skipped players persisted to DB
 - ✅ Undo works across page refreshes (DB-level)
-- ✅ Player pool cached per `"{season}_{view}"` key (NBA API / XGBoost called once per combo per server lifecycle)
-- ✅ 67 tests passing
+- ✅ Player pool cached per server lifecycle (projection_service has its own `_projected_pool_cache`)
+- ✅ 111 tests passing
 - ✅ **Global Navigation Bar** (Round 3) — persistent top nav with NavLink active styling
 - ✅ **Dashboard Page** — rooms list, aggregated activity feed, quick links
 - ✅ **Room persistence across navigation** — sessionStorage remembers active room when switching pages
-- ✅ **Default team in ReportPickModal** — auto-selects current user's team
-- ✅ **Activity feed improvements** — `room_created`, `member_joined`, `member_left` events display properly; `player_name` persisted in pick activity log payloads
 - ✅ **Collapsible Category Strengths** — toggle to show/hide, matches Filters & Scoring pattern
 
-**Most Recent Session (2026-02-05) - XGBoost Projections Wired Up:**
+**Most Recent Session (2026-02-05) - Enhanced Projection Model:**
 
-Connected the trained XGBoost model to the draft room and player stats page. Added season/view toggle so users can view 2022-23, 2023-24, 2024-25 actuals or 2025-26 projected stats. Auction values recalculated from projected stats in projection mode.
+Implemented a 7-phase plan to improve the projection model (Wembanyama BPG was 1.5 projected vs 3.6 actual). Added richer features, enhanced data pipeline, auction value age/durability adjustments, mid-season blending.
 
-**Key Changes:**
-- `packages/draft-optimizer/draft_optimizer/projection_service.py` — **NEW** inference pipeline. Lazy singleton `_get_projector()` loads XGBoost from `models/player_projector/`. `load_projected_players(target_season, min_games)` fetches 2 prior seasons, builds 33-feature DataFrame, runs 9-regressor prediction, calculates pool-aware auction values. Cached per target_season.
-- `packages/draft-optimizer/draft_optimizer/session_persistence.py` — Cache key changed from `season` to `f"{season}_{view}"`. `_get_player_pool(season, view)` dispatches: `view="actual"` → `load_real_players_from_api()`, `view="projected"` → `load_projected_players()`. Added `view` param to `load_draft_state()` and `load_room_draft_state()`. `undo_room_last_pick` checks both `actual` and `projected` cache keys for player name lookup.
-- `packages/api/api/routers/players.py` — Added `season`/`view` query params to all 5 endpoints (`get_players`, `search_players`, `get_teams`, `get_player`, `compare_players`). Cache key `f"{season}_{view}"`. Added `season`/`view` fields to `PlayerListResponse`.
-- `packages/api/api/routers/draft_sessions.py` — Added `view` query param to 6 endpoints (`get_session_state`, `get_room_state`, `get_recommendations`, `get_room_recommendations`, `search_players`, `search_room_players`). Passes `view` through to persistence layer.
-- `apps/web/src/lib/types.ts` — Added `season`/`view` to `PlayerStatsFilters`. Added `StatsViewMode` type and `STATS_VIEW_OPTIONS` constant (4 options: 3 actual seasons + 2025-26 projected).
-- `apps/web/src/lib/playerStatsApi.ts` — All 5 functions pass optional `season`/`view` query params.
-- `apps/web/src/lib/api.ts` — Added optional `view` param to `getDraftState()`, `getRoomState()`, `getCategoryRecommendations()`, `getRoomRecommendations()`, `searchPlayers()`, `searchRoomPlayers()`.
-- `apps/web/src/components/player-stats/PlayerStatsFilters.tsx` — Added segmented button group for season/view mode selection. "2025-26 Projected" option gets sparkle icon.
-- `apps/web/src/pages/PlayerStats.tsx` — URL sync for `season`/`view`. Info banner when viewing projected data. Teams reload when season/view changes.
-- `apps/web/src/pages/DraftRoom.tsx` — Added `statsView` state (`'actual' | 'projected'`). Compact Actual/Projected toggle in controls bar. All API calls pass `statsView`.
+**Key Files Changed/Created:**
 
-**Projection Pipeline Flow:**
-1. `load_projected_players("2025-26")` fetches 2023-24 + 2024-25 via `PlayerStatsService.get_projection_ready_data()`
-2. `ProjectionFeatureBuilder.build_inference_features()` → 33-feature DataFrame
-3. `XGBoostProjector.predict()` → 9 stat predictions per player (ppg, rpg, apg, spg, bpg, topg, fg_pct, ft_pct, three_pm)
-4. `calculate_fantasy_points()` → FPTS from predicted stats
-5. `calculate_auction_value_v2()` → pool-aware auction values
-6. `infer_position_from_stats()` → position from stat profile
-7. Returns `list[PlayerProjection]` sorted by auction_value desc
+| File | What |
+|------|------|
+| `packages/core/core/utils/data_loader.py` | Added `get_player_bio_stats()`, `get_player_estimated_metrics()`, `get_team_estimated_metrics()` |
+| `packages/core/core/services/player_stats_service.py` | Added `get_enhanced_projection_data()` — joins base stats with bio, advanced, team metrics. Maps `TEAM_ID` → abbreviation via `nba_api.stats.static.teams`. |
+| `packages/draft-optimizer/draft_optimizer/ml/features.py` | Rewrote `ProjectionFeatureBuilder` for ~61 features with backward compat. New: demographics, advanced stats, team context, derived per-minute rates, trajectory features. |
+| `packages/draft-optimizer/draft_optimizer/features.py` | `calculate_auction_value_v2()` — added `age`, `avg_games_played`, `games_played_trend` params. Exponential age curve, power-law GP scaling, GP trend penalty. |
+| `packages/draft-optimizer/draft_optimizer/projection_service.py` | Updated to try enhanced data first (fallback to basic). Added `blend_mid_season()`. Passes age/GP data to auction calc. Diagnostic logging. |
+| `packages/api/api/routers/players.py` | Removed buggy time-based cache. Projected data delegates to `projection_service` (which has server-lifetime cache). Actual data cached per-key. |
+| `scripts/train_projection_model.py` | **NEW** training script with `--backtest` and `--tune` flags. Temporal split, expanded to 5 seasons. |
+| `tests/test_features_enhanced.py` | **NEW** 22 tests for enhanced features |
+| `tests/test_mid_season_blend.py` | **NEW** 12 tests for mid-season blending |
+| `tests/test_auction_calibration.py` | Added `TestAgePenalty` (5 tests) and `TestDurabilityPenalty` (5 tests) |
+
+**Enhanced Projection Pipeline Flow:**
+1. `load_projected_players("2025-26")` tries `get_enhanced_projection_data()` first (falls back to basic)
+2. Enhanced data: base stats + bio (age, height, draft info) + player estimated metrics + team metrics
+3. `ProjectionFeatureBuilder.build_inference_features()` → ~61 features (model's `config.json` selects which to use)
+4. `XGBoostProjector.predict()` → 9 stat predictions per player
+5. Mid-season blending if target season has partial actual data
+6. `calculate_fantasy_points()` → FPTS
+7. `calculate_auction_value_v2(age=, avg_games_played=, games_played_trend=)` → adjusted auction values
+8. Returns `list[PlayerProjection]` sorted by auction_value desc
+
+**Auction Value Adjustments:**
+- **Age**: `age_factor = max(0.30, 0.9^(age - 33))` for age >= 33. LeBron (40) ≈ 0.48x, 35yo ≈ 0.80x
+- **Durability**: Uses multi-season avg GP. `(gp/70)^1.3` power-law scaling. Floor at 30%.
+- **GP Trend**: Extra 0.3% penalty per game drop beyond -5, capped at 9%
+
+**Caching Architecture (important — was a source of bugs):**
+- `projection_service.py` has `_projected_pool_cache` (server-lifetime, keyed by target_season)
+- `session_persistence.py` has `_player_pool_cache` (server-lifetime, keyed by `"{season}_{view}"`)
+- `players.py` has `_actual_player_cache` (server-lifetime, actual data only). Projected data delegates to `projection_service` directly.
+- `data_loader.py` has `diskcache` (24-hour TTL on disk, raw NBA API responses)
+- **All three in-memory caches clear on server restart.** The diskcache persists on disk.
+
+**Bugs Fixed During This Session:**
+1. `LeagueDashPlayerBioStats` used wrong param `league_id_nullable` → fixed to `league_id`
+2. `age` was not passed to `calculate_auction_value_v2()` → added extraction from enhanced data
+3. `TeamEstimatedMetrics` returns `TEAM_ID`/`TEAM_NAME` but NOT `TEAM_ABBREVIATION` → added mapping via `nba_api.stats.static.teams.get_teams()`
+4. `players.py` had a broken shared `_cache_timestamp` causing Draft Room and Player Stats to show different values → removed time-based cache, delegate projected data to projection_service's own cache
+
+**Note:** The current trained model in `models/player_projector/` still uses 33 features. To use the new 61 features, need to retrain: `uv run python scripts/train_projection_model.py --backtest`. The backward compat design means the old model still works (selects its 33 columns from the ~61 available).
 
 **Note:** React StrictMode causes double API calls in development (mount-unmount-remount). This is normal and does not happen in production builds.
 
 ---
 
-**Previous Session (2026-02-05) - Round 3: Global Nav + Dashboard + UI Polish:**
-
-Added global navigation bar, dashboard page, and several UX improvements.
-
-**Key Changes:**
-- `apps/web/src/components/GlobalNavBar.tsx` — **NEW** sticky nav bar (h-12, z-40) with branding, NavLink nav items (Draft Room, Player Stats, Optimizer), AuthButton + ThemeToggle. Icons-only on mobile.
-- `apps/web/src/pages/DashboardPage.tsx` — **NEW** auth-gated dashboard with room cards (status badge, member count, friend code copy), aggregated activity from active rooms, quick links. Clicking a room navigates to `/draft-room` with `state: { roomId }`.
-- `apps/web/src/App.tsx` — Replaced inline `HomePage`/`OptimizerPage` with `AppLayout` wrapper that renders `GlobalNavBar` (hidden on `/auth/callback`) + `<Outlet />`. Routes use layout wrapper.
-- `apps/web/src/pages/DraftRoom.tsx` — Removed AuthButton/ThemeToggle from 5 locations (nav bar handles it). Added `sessionStorage` persistence for active room ID so navigating away and back restores the room. Reads `location.state?.roomId` from dashboard navigation. State initialized synchronously from sessionStorage to avoid lobby flash.
-- `apps/web/src/pages/PlayerStats.tsx` — Removed "Back to Home" link and ThemeToggle (nav bar handles it).
-- `apps/web/src/components/draft-room/ReportPickModal.tsx` — Added `defaultMemberId` prop, used in reset effect to auto-select user's team.
-- `apps/web/src/components/draft-room/ActivityFeed.tsx` — Added `room_created` action config (PlusCircle icon) and description case.
-- `apps/web/src/components/draft-room/RecommendationsPanel.tsx` — Category Strengths and Filters & Scoring are both collapsible toggles with chevron at right edge.
-- `packages/draft-optimizer/draft_optimizer/session_persistence.py` — `persist_reported_pick` now accepts and stores `player_name` in activity log payload. `undo_room_last_pick` looks up player name from cached pool and includes it in payload + return value.
-- `packages/api/api/routers/draft_sessions.py` — Passes `player_name` to `persist_reported_pick`. Undo broadcast includes `player_name`.
-
-**Room Persistence Pattern (sessionStorage):**
-- `handleSelectRoom` writes `draft-room-id` to sessionStorage
-- `handleBackToLobby` removes it
-- Component initializes `roomId` and `pageView` synchronously from sessionStorage (avoids lobby flash / extra API calls)
-- `location.state?.roomId` from dashboard is a fallback for first navigation
-
----
-
-**Previous Session (2026-02-05) - Phase 2: Session Persistence:**
-
-Replaced in-memory draft sessions with database-backed persistence. Auth required for all draft endpoints. `DraftState` class remains the computation engine — the DB is the persistence layer. Pattern: **load from DB → reconstruct DraftState → compute → persist mutations back**.
-
-**Key Architecture Decisions:**
-- `DraftState` (in `draft_room.py`) is never persisted directly — it's reconstructed each request by replaying picks + taken players from DB
-- Player pool is cached in-memory per season in `session_persistence.py` (`_player_pool_cache` dict)
-- Undo compares timestamps of last pick vs last taken player in DB, deletes the newer one
-- Skipped players are persisted to DB and auto-loaded in recommendations (merged with any explicit `skipped_ids` param)
-- `sessionId` changed from `string` (UUID) to `number` (PostgreSQL serial) throughout frontend and API
-
-**Backend Changes:**
-- `packages/core/core/db/models.py` — Added 5 models: `DraftSession`, `DraftPick`, `TakenPlayer`, `SkippedPlayer`, `SessionPreferences` (all CASCADE delete from parent)
-- `packages/core/alembic/` — Alembic migration infrastructure (env.py, script.py.mako, versions/)
-- `packages/core/alembic.ini` — Alembic config (reads DB URL from `get_db_url()`)
-- `packages/draft-optimizer/draft_optimizer/session_persistence.py` — **NEW** persistence service with `create_db_session()`, `load_draft_state()`, `persist_draft_pick()`, `persist_taken_player()`, `persist_skipped_player()`, `undo_last_action()`, `list_user_sessions()`, `get_db_session_record()`, `delete_db_session()`, `get_skipped_player_ids()`
-- `packages/draft-optimizer/draft_optimizer/draft_room.py` — Removed module-level `_sessions` dict and `create_session()`, `get_session()`, `delete_session()`, `list_sessions()` functions. `DraftState` class unchanged.
-- `packages/api/api/routers/draft_sessions.py` — **NEW** router replacing old `draft_room.py`. All endpoints require `get_current_user` auth dependency.
-- `packages/api/api/routers/draft_room.py` — **DELETED** (replaced by `draft_sessions.py`)
-- `packages/api/api/main.py` — Updated to register `draft_sessions` router instead of `draft_room`
-
-**Frontend Changes:**
-- `apps/web/src/lib/api.ts` — Added `credentials: 'include'` to ALL fetch calls, changed URLs from `/api/v1/draft-room/session/...` to `/api/v1/draft-sessions/...`, changed `sessionId` type from `string` to `number`, added `listDraftSessions()`, `skipPlayer()`, `deleteDraftSession()`, `updateDraftSession()`
-- `apps/web/src/lib/types.ts` — Added `DraftSessionListItem` interface, changed `session_id` from `string` to `number` in `DraftState` and `CreateSessionResponse`
-- `apps/web/src/pages/DraftRoom.tsx` — Auth gate (sign in required), session picker flow, skipped players via API, "Sessions" back button
-- `apps/web/src/components/draft-room/SessionPicker.tsx` — **NEW** component: lists sessions, resume/delete, create form (name, budget, teams, season)
-
-**Database Tables Added (migration `5d751b19e16d`):**
-- `draft_sessions` — id, user_id (FK→users), name, league_type, budget_total, roster_size, num_teams, season, status, created_at, updated_at
-- `draft_picks` — id, session_id (FK), player_id, purchase_price, suggested_price, slot, pick_order, picked_at. Unique(session_id, player_id)
-- `taken_players` — id, session_id (FK), player_id, marked_at. Unique(session_id, player_id)
-- `skipped_players` — id, session_id (FK), player_id, skip_reason, recommendation_context (JSONB), skipped_at
-- `session_preferences` — id, session_id (FK, unique), scoring_mode, position_filter, min/max cost/fpts, updated_at
-
-**Not Yet Implemented (deferred):**
-- "Clear skipped" API endpoint (skipped players are persisted, currently no bulk-delete endpoint)
-- Session preferences are not read/written yet (table exists, UI still uses local state for filters)
-
----
-
-**Previous Session (2026-02-05) - Phase 1: Google OAuth Implementation:**
-
-Implemented Google authentication with Authorization Code Flow + PKCE.
-
-**Backend (FastAPI):**
-- `packages/api/api/auth/` module with config, jwt, oauth, dependencies
-- `packages/api/api/routers/auth.py` - Auth endpoints
-- `packages/core/core/db/models.py` - Added User model
-- JWT tokens stored in httpOnly cookies (`sports_hub_token`)
-- PKCE code verifier validation
-
-**Frontend (React):**
-- `src/contexts/AuthContext.tsx` - Auth state management
-- `src/hooks/useGoogleAuth.ts` - PKCE flow (code verifier/challenge generation)
-- `src/components/AuthButton.tsx` - Sign in/out button with avatar
-- `src/pages/AuthCallback.tsx` - OAuth callback handler
-- `src/lib/auth.ts` - API functions for auth
-
-**Auth API Endpoints:**
-```
-POST /api/v1/auth/google   - Exchange code for JWT, set cookie
-GET  /api/v1/auth/me       - Get current user (requires auth)
-PATCH /api/v1/auth/me      - Update preferences
-POST /api/v1/auth/logout   - Clear cookie
-```
-
-**Environment Variables Required:**
-```bash
-# Backend .env
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-client-secret
-JWT_SECRET=<generate with: openssl rand -base64 32>
-
-# Frontend apps/web/.env
-VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-```
-
-**Google Cloud Console Setup:**
-1. Create OAuth 2.0 Client ID (Web application)
-2. Authorized JavaScript origins: `http://localhost:3001`
-3. Authorized redirect URIs: `http://localhost:3001/auth/callback`
-
-**Port Configuration:** Frontend runs on port 3001 (LeetCode Spaced Rep uses port 3000).
-
-**OAuth Bugs Fixed:**
-1. Stale sessionStorage causing infinite loading spinner — AuthContext checks pathname before treating verifier as active
-2. AuthCallback not cleaning sessionStorage on error paths — explicit cleanup
-3. React StrictMode double-execution — `useRef` guard
-
----
-
-**Previous Session (2026-02-04) - Theme System Implementation:**
-
-Added full light/dark mode support. ThemeContext manages state, persists to localStorage. CSS variables in `index.css`. All components use semantic color tokens.
-
-**Previous Session (2026-02-03) - Draft Room UI/UX Improvements:**
-
-Stable prices, expandable stats, taken players panel, fixed category strength scaling, improved reinforce recs, filters/scoring modes, skip button, FPTS/$ display, simplified affordability (2-tier: affordable/stretch).
+**Previous Sessions (summarized):**
+- **Round 3: Global Nav + Dashboard** — `GlobalNavBar.tsx`, `DashboardPage.tsx`, room persistence via sessionStorage, activity feed improvements
+- **Phase 2: Session Persistence** — DB-backed draft sessions (DraftSession, DraftPick, TakenPlayer, SkippedPlayer, SessionPreferences models). Pattern: load from DB → reconstruct DraftState → persist mutations. Migration `5d751b19e16d`.
+- **Phase 1: Google OAuth** — Authorization Code Flow + PKCE. JWT in httpOnly cookie (`sports_hub_token`). Auth endpoints at `/api/v1/auth/*`. Env vars: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, `VITE_GOOGLE_CLIENT_ID`.
+- **Theme System** — Light/dark mode via ThemeContext + CSS variables
+- **Draft Room UI/UX** — Stable prices, expandable stats, taken panel, category strengths, filters/scoring modes, skip button
 
 ## Commands
 
@@ -224,7 +132,7 @@ make docker-down          # Stop containers
 
 ```bash
 make lint                 # Must pass before committing (3 pre-existing E402 in main.py are expected)
-uv run pytest -v packages/  # Verify tests still pass (67 tests)
+uv run pytest -v packages/  # Verify tests still pass (111 tests)
 cd apps/web && npm run build  # Check TypeScript compiles
 ```
 
@@ -251,7 +159,9 @@ sports-intelligence-hub/
 │   │       ├── session_persistence.py  # DB persistence layer (create, load, persist, undo)
 │   │       ├── projection_service.py  # XGBoost inference pipeline (wired to draft room + player stats)
 │   │       ├── real_data.py    # Load real NBA players from API
-│   │       └── ml/projector.py # XGBoost model loading + prediction
+│   │       └── ml/
+│   │           ├── features.py     # ProjectionFeatureBuilder (~61 features), STAT_TARGETS
+│   │           └── projector.py    # XGBoost model loading + prediction
 │   └── api/
 │       └── api/
 │           ├── auth/                     # Authentication module
@@ -301,7 +211,9 @@ sports-intelligence-hub/
 │       │   └── utils.ts
 │       ├── index.css                     # Theme CSS variables (light/dark)
 │       └── tailwind.config.js            # Semantic color tokens
-└── models/player_projector/  # Trained XGBoost model
+├── scripts/
+│   └── train_projection_model.py  # Training script (--backtest, --tune flags)
+└── models/player_projector/  # Trained XGBoost model (33 features, needs retrain for 61)
 ```
 
 ## API Endpoints
@@ -429,7 +341,7 @@ const handleSkip = async (playerId: string) => {
 After changes, verify:
 1. `uv run ruff check packages/` passes (3 pre-existing E402 in main.py expected)
 2. `uv run mypy packages/` passes
-3. `uv run pytest -v packages/` passes (67 tests)
+3. `uv run pytest -v packages/` passes (111 tests)
 4. `cd apps/web && npm run build` compiles
 
 Manual testing:
@@ -441,6 +353,18 @@ Manual testing:
 6. Draft players → close browser → reopen → resume session with state intact
 7. Undo works across page refreshes
 8. Skipped players persist across refreshes
+
+## Environment Variables
+
+```bash
+# Backend .env
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+JWT_SECRET=<generate with: openssl rand -base64 32>
+
+# Frontend apps/web/.env
+VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+```
 
 ## Common Issues
 
@@ -478,11 +402,12 @@ className="text-stat-negative"  // Red
 
 ## Future Work
 
-1. **Volume stats** - Add total stats (not just per-game) to better evaluate player impact
-2. **Clear skipped players endpoint** - Bulk delete skipped players for a session
-3. **Persist session preferences** - Read/write filter preferences from `session_preferences` table
-4. **Game predictor** - Use XGBoost classifier for game outcomes
-5. **LLM scouting reports** - Integrate Gemini API
+1. **Retrain model with 61 features** - Run `uv run python scripts/train_projection_model.py --backtest`. Current model uses 33 features. Expected R2 improvement from 0.674 to ~0.78+. Wembanyama BPG should improve from 1.5 to ~3.2-3.5. The pipeline is backward compatible (old model works with new features, new model uses all 61).
+2. **Volume stats** - Add total stats (not just per-game) to better evaluate player impact
+3. **Clear skipped players endpoint** - Bulk delete skipped players for a session
+4. **Persist session preferences** - Read/write filter preferences from `session_preferences` table
+5. **Game predictor** - Use XGBoost classifier for game outcomes
+6. **LLM scouting reports** - Integrate Gemini API
 
 ## Learning Session Notes (2026-02-04)
 

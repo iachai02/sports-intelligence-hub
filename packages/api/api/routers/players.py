@@ -1,7 +1,6 @@
 """Public player stats browser API endpoints."""
 
 import logging
-import time
 from typing import Literal
 
 from draft_optimizer.projection_service import load_projected_players
@@ -13,43 +12,33 @@ from pydantic import BaseModel, Field
 router = APIRouter(prefix="/api/v1/players", tags=["players"])
 logger = logging.getLogger(__name__)
 
-# In-memory cache for player data (1 hour TTL)
-# Key format: "{season}_{view}" e.g. "2024-25_actual", "2025-26_projected"
-_player_cache: dict[str, list[PlayerProjection]] = {}
-_cache_timestamp: float = 0
-CACHE_TTL_SECONDS = 3600  # 1 hour
+# In-memory cache for player data (server-lifetime, keyed by "{season}_{view}").
+# Projected data delegates to projection_service (which has its own cache).
+# Actual data is cached here since load_real_players_from_api has no internal cache.
+_actual_player_cache: dict[str, list[PlayerProjection]] = {}
 
 
 def _get_cached_players(
     season: str = "2024-25", view: str = "actual"
 ) -> list[PlayerProjection]:
-    """Get players from cache or load from API/projector."""
-    global _player_cache, _cache_timestamp
-
-    cache_key = f"{season}_{view}"
-    current_time = time.time()
-
-    # Check if cache is valid
-    if cache_key in _player_cache and (current_time - _cache_timestamp) < CACHE_TTL_SECONDS:
-        return _player_cache[cache_key]
-
-    # Load fresh data
+    """Get players from loader with caching."""
     if view == "projected":
-        logger.info(f"Loading projected player data for {season} (cache miss or expired)")
+        # projection_service.load_projected_players has its own lifetime cache
         players = load_projected_players(target_season=season)
     else:
-        logger.info(f"Loading player data for season {season} (cache miss or expired)")
+        cache_key = f"{season}_actual"
+        if cache_key in _actual_player_cache:
+            return _actual_player_cache[cache_key]
+        logger.info(f"Loading player data for season {season} (first time)")
         players = load_real_players_from_api(season=season, min_games=20)
+        if players:
+            _actual_player_cache[cache_key] = players
 
     if not players:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to load player data for {season} ({view})",
         )
-
-    # Update cache
-    _player_cache[cache_key] = players
-    _cache_timestamp = current_time
 
     return players
 
