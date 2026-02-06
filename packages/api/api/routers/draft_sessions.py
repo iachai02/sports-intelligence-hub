@@ -285,13 +285,14 @@ async def create_session(
 async def get_session_state(
     session_id: int,
     user: Annotated[User, Depends(get_current_user)],
+    view: str = "actual",
 ) -> DraftStateResponse:
     """Get the current state of a draft session (reconstructed from DB)."""
     _get_owned_session(session_id, user)
 
     db = get_session()
     try:
-        draft_state = load_draft_state(db, session_id)
+        draft_state = load_draft_state(db, session_id, view=view)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     finally:
@@ -497,6 +498,7 @@ async def get_recommendations(
     max_fpts: float | None = None,
     affordability: str | None = None,
     skipped_ids: str | None = None,
+    view: str = "actual",
 ) -> CategoryRecommendationsResponse:
     """Get category-aware recommendations with filters.
 
@@ -507,7 +509,7 @@ async def get_recommendations(
 
     db = get_session()
     try:
-        draft_state = load_draft_state(db, session_id)
+        draft_state = load_draft_state(db, session_id, view=view)
 
         # Load skipped IDs from DB
         db_skipped = get_skipped_player_ids(db, session_id)
@@ -627,6 +629,7 @@ async def search_players(
     user: Annotated[User, Depends(get_current_user)],
     limit: int = 10,
     include_taken: bool = False,
+    view: str = "actual",
 ) -> list[PlayerSearchResponse]:
     """Search for players by name."""
     _get_owned_session(session_id, user)
@@ -636,7 +639,7 @@ async def search_players(
 
     db = get_session()
     try:
-        draft_state = load_draft_state(db, session_id)
+        draft_state = load_draft_state(db, session_id, view=view)
     finally:
         db.close()
 
@@ -803,6 +806,7 @@ async def undo_pick(
 async def get_room_state(
     session_id: int,
     user: Annotated[User, Depends(get_current_user)],
+    view: str = "actual",
 ) -> DraftStateResponse:
     """Get room state from the requesting user's team perspective."""
     db = get_session()
@@ -812,7 +816,7 @@ async def get_room_state(
             raise HTTPException(status_code=403, detail="Not a member of this room")
 
         draft_state = load_room_draft_state(
-            db, session_id, viewing_member_id=member.id
+            db, session_id, viewing_member_id=member.id, view=view
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
@@ -912,6 +916,7 @@ async def get_room_recommendations(
     max_fpts: float | None = None,
     affordability: str | None = None,
     skipped_ids: str | None = None,
+    view: str = "actual",
 ) -> CategoryRecommendationsResponse:
     """Get category-aware recommendations from the user's team perspective."""
     db = get_session()
@@ -921,7 +926,7 @@ async def get_room_recommendations(
             raise HTTPException(status_code=403, detail="Not a member of this room")
 
         draft_state = load_room_draft_state(
-            db, session_id, viewing_member_id=member.id
+            db, session_id, viewing_member_id=member.id, view=view
         )
 
         db_skipped = get_skipped_player_ids(db, session_id)
@@ -1014,6 +1019,7 @@ async def search_room_players(
     user: Annotated[User, Depends(get_current_user)],
     limit: int = 10,
     include_taken: bool = False,
+    view: str = "actual",
 ) -> list[PlayerSearchResponse]:
     """Search for available players in a room context."""
     if len(q) < 2:
@@ -1026,7 +1032,7 @@ async def search_room_players(
             raise HTTPException(status_code=403, detail="Not a member of this room")
 
         draft_state = load_room_draft_state(
-            db, session_id, viewing_member_id=member.id
+            db, session_id, viewing_member_id=member.id, view=view
         )
     finally:
         db.close()

@@ -31,15 +31,15 @@ const COLUMNS: Column[] = [
   { key: 'position', label: 'Pos', align: 'left', width: 'w-10' },
   { key: 'auction_value', label: 'Value', align: 'right', width: 'w-14', format: formatCurrency },
   { key: 'projected_fpts', label: 'FPTS', align: 'right', width: 'w-12', format: (v) => formatStat(v) },
+  { key: 'fg_pct', label: 'FG%', align: 'right', width: 'w-12', format: formatPercent },
+  { key: 'ft_pct', label: 'FT%', align: 'right', width: 'w-12', format: formatPercent },
+  { key: 'three_pm', label: '3PM', align: 'right', width: 'w-10', format: (v) => formatStat(v) },
   { key: 'ppg', label: 'PPG', align: 'right', width: 'w-10', format: (v) => formatStat(v) },
   { key: 'rpg', label: 'RPG', align: 'right', width: 'w-10', format: (v) => formatStat(v) },
   { key: 'apg', label: 'APG', align: 'right', width: 'w-10', format: (v) => formatStat(v) },
   { key: 'spg', label: 'SPG', align: 'right', width: 'w-10', format: (v) => formatStat(v) },
   { key: 'bpg', label: 'BPG', align: 'right', width: 'w-10', format: (v) => formatStat(v) },
   { key: 'topg', label: 'TOV', align: 'right', width: 'w-10', format: (v) => formatStat(v) },
-  { key: 'fg_pct', label: 'FG%', align: 'right', width: 'w-12', format: formatPercent },
-  { key: 'ft_pct', label: 'FT%', align: 'right', width: 'w-12', format: formatPercent },
-  { key: 'three_pm', label: '3PM', align: 'right', width: 'w-10', format: (v) => formatStat(v) },
 ];
 
 function SortIcon({ column, currentSort, sortOrder }: { column: SortColumn; currentSort: string; sortOrder: 'asc' | 'desc' }) {

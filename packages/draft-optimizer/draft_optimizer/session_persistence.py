@@ -26,20 +26,32 @@ from draft_optimizer.schemas import PlayerProjection, RosterConfig, RosterSlot
 
 logger = logging.getLogger(__name__)
 
-# In-memory player pool cache keyed by season string.
-# NBA API only called once per season per server lifecycle.
+# In-memory player pool cache keyed by "{season}_{view}" string.
+# NBA API / projector only called once per season+view per server lifecycle.
 _player_pool_cache: dict[str, list[PlayerProjection]] = {}
 
 
-def _get_player_pool(season: str) -> list[PlayerProjection]:
-    """Get player pool for a season, caching across calls."""
-    if season not in _player_pool_cache:
-        logger.info(f"Loading player pool for season {season} (first time)")
-        players = load_real_players_from_api(season=season, min_games=20)
+def _get_player_pool(season: str, view: str = "actual") -> list[PlayerProjection]:
+    """Get player pool for a season+view, caching across calls.
+
+    Args:
+        season: NBA season string (e.g. "2024-25")
+        view: "actual" for real stats, "projected" for XGBoost projections
+    """
+    cache_key = f"{season}_{view}"
+    if cache_key not in _player_pool_cache:
+        if view == "projected":
+            from draft_optimizer.projection_service import load_projected_players
+
+            logger.info(f"Loading projected player pool for {season} (first time)")
+            players = load_projected_players(target_season=season)
+        else:
+            logger.info(f"Loading player pool for season {season} (first time)")
+            players = load_real_players_from_api(season=season, min_games=20)
         if not players:
-            raise ValueError(f"Failed to load player pool for season {season}")
-        _player_pool_cache[season] = players
-    return _player_pool_cache[season]
+            raise ValueError(f"Failed to load player pool for {season} ({view})")
+        _player_pool_cache[cache_key] = players
+    return _player_pool_cache[cache_key]
 
 
 def create_db_session(
@@ -65,7 +77,7 @@ def create_db_session(
     Returns:
         Tuple of (DraftSession DB record, DraftState computation engine)
     """
-    player_pool = _get_player_pool(season)
+    player_pool = _get_player_pool(season, view="actual")
 
     # Generate unique friend code
     code = generate_friend_code()
@@ -114,7 +126,9 @@ def create_db_session(
     return db_session, draft_state
 
 
-def load_draft_state(db: Session, session_id: int) -> DraftState:
+def load_draft_state(
+    db: Session, session_id: int, view: str = "actual"
+) -> DraftState:
     """Reconstruct a DraftState from database records.
 
     Loads session config, reloads player pool (cached), replays picks + taken players.
@@ -122,6 +136,7 @@ def load_draft_state(db: Session, session_id: int) -> DraftState:
     Args:
         db: SQLAlchemy session
         session_id: Draft session ID
+        view: "actual" or "projected"
 
     Returns:
         Fully reconstructed DraftState
@@ -133,7 +148,7 @@ def load_draft_state(db: Session, session_id: int) -> DraftState:
     if db_session is None:
         raise ValueError(f"Session {session_id} not found")
 
-    player_pool = _get_player_pool(db_session.season)
+    player_pool = _get_player_pool(db_session.season, view=view)
 
     config = RosterConfig(budget=float(db_session.budget_total))
     draft_state = DraftState(
@@ -418,6 +433,7 @@ def load_room_draft_state(
     db: Session,
     session_id: int,
     viewing_member_id: int | None = None,
+    view: str = "actual",
 ) -> DraftState:
     """Reconstruct a DraftState for a room, from a specific team's perspective.
 
@@ -429,6 +445,7 @@ def load_room_draft_state(
         db: SQLAlchemy session
         session_id: Draft session ID
         viewing_member_id: RoomMember ID whose perspective to use
+        view: "actual" or "projected"
 
     Returns:
         Fully reconstructed DraftState
@@ -437,7 +454,7 @@ def load_room_draft_state(
     if db_session is None:
         raise ValueError(f"Session {session_id} not found")
 
-    player_pool = _get_player_pool(db_session.season)
+    player_pool = _get_player_pool(db_session.season, view=view)
 
     config = RosterConfig(budget=float(db_session.budget_total))
     draft_state = DraftState(
@@ -609,15 +626,19 @@ def undo_room_last_pick(
         if member:
             team_name = member.team_name
 
-    # Look up player name from cached pool
+    # Look up player name from cached pool (check both actual and projected)
     player_name = player_id
     session_record = db.get(DraftSession, session_id)
     if session_record:
         season = session_record.season or "2024-25"
-        if season in _player_pool_cache:
-            for p in _player_pool_cache[season]:
-                if p.id == player_id:
-                    player_name = p.name
+        for view_suffix in ("actual", "projected"):
+            cache_key = f"{season}_{view_suffix}"
+            if cache_key in _player_pool_cache:
+                for p in _player_pool_cache[cache_key]:
+                    if p.id == player_id:
+                        player_name = p.name
+                        break
+                if player_name != player_id:
                     break
 
     db.delete(last_pick)
@@ -681,7 +702,7 @@ def get_room_board_state(
     # Build player name lookup from cached pool
     player_name_map: dict[str, str] = {}
     try:
-        pool = _get_player_pool(db_session.season)
+        pool = _get_player_pool(db_session.season, view="actual")
         player_name_map = {p.id: p.name for p in pool}
     except Exception:
         pass  # Gracefully degrade if pool unavailable

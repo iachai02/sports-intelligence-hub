@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Loader2, AlertCircle, BarChart3 } from 'lucide-react';
+import { Loader2, AlertCircle, BarChart3, Sparkles } from 'lucide-react';
 import type { PlayerStats as PlayerStatsType, PlayerStatsFilters } from '../lib/types';
 import { getPlayers, getPlayer, getTeams, comparePlayers } from '../lib/playerStatsApi';
 import {
@@ -17,6 +17,8 @@ const DEFAULT_FILTERS: PlayerStatsFilters = {
   sortOrder: 'desc',
   page: 1,
   perPage: 50,
+  season: '2024-25',
+  view: 'actual',
 };
 
 export function PlayerStats() {
@@ -32,6 +34,8 @@ export function PlayerStats() {
       sortOrder: (searchParams.get('sortOrder') as 'asc' | 'desc') || DEFAULT_FILTERS.sortOrder,
       page: parseInt(searchParams.get('page') || '1', 10),
       perPage: parseInt(searchParams.get('perPage') || '50', 10),
+      season: searchParams.get('season') || DEFAULT_FILTERS.season,
+      view: (searchParams.get('view') as 'actual' | 'projected') || DEFAULT_FILTERS.view,
     };
   }, [searchParams]);
 
@@ -64,17 +68,19 @@ export function PlayerStats() {
     if (filters.sortOrder !== DEFAULT_FILTERS.sortOrder) params.set('sortOrder', filters.sortOrder);
     if (filters.page !== 1) params.set('page', filters.page.toString());
     if (filters.perPage !== 50) params.set('perPage', filters.perPage.toString());
+    if (filters.season && filters.season !== DEFAULT_FILTERS.season) params.set('season', filters.season);
+    if (filters.view && filters.view !== DEFAULT_FILTERS.view) params.set('view', filters.view);
     if (comparePlayerIds.length > 0) params.set('compare', comparePlayerIds.join(','));
 
     setSearchParams(params, { replace: true });
   }, [filters, comparePlayerIds, setSearchParams]);
 
-  // Load teams on mount
+  // Load teams when season/view changes
   useEffect(() => {
-    getTeams()
+    getTeams(filters.season, filters.view)
       .then(setTeams)
       .catch((err) => console.error('Failed to load teams:', err));
-  }, []);
+  }, [filters.season, filters.view]);
 
   // Load players when filters change
   useEffect(() => {
@@ -101,13 +107,13 @@ export function PlayerStats() {
       return;
     }
 
-    getPlayer(selectedPlayerId)
+    getPlayer(selectedPlayerId, filters.season, filters.view)
       .then(setSelectedPlayer)
       .catch((err) => {
         console.error('Failed to load player:', err);
         setSelectedPlayerId(null);
       });
-  }, [selectedPlayerId]);
+  }, [selectedPlayerId, filters.season, filters.view]);
 
   // Load comparison players
   useEffect(() => {
@@ -116,10 +122,10 @@ export function PlayerStats() {
       return;
     }
 
-    comparePlayers(comparePlayerIds)
+    comparePlayers(comparePlayerIds, filters.season, filters.view)
       .then((response) => setComparePlayers(response.players))
       .catch((err) => console.error('Failed to load comparison:', err));
-  }, [comparePlayerIds]);
+  }, [comparePlayerIds, filters.season, filters.view]);
 
   const handleFiltersChange = (newFilters: PlayerStatsFilters) => {
     setFilters(newFilters);
@@ -191,6 +197,20 @@ export function PlayerStats() {
             onSelectPlayer={setSelectedPlayerId}
           />
         </motion.section>
+
+        {/* Projected data info banner */}
+        {filters.view === 'projected' && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="bg-accent/10 border border-accent/20 rounded-xl px-4 py-3 mb-6 flex items-center gap-2"
+          >
+            <Sparkles className="h-4 w-4 text-accent shrink-0" />
+            <p className="text-sm text-foreground">
+              Showing XGBoost-projected stats for {filters.season}. Auction values are recalculated from projected stats.
+            </p>
+          </motion.div>
+        )}
 
         {/* Error state */}
         {error && (

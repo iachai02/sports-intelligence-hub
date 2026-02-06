@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, AlertCircle, LayoutGrid, Users, Sparkles, ClipboardList, Plus } from 'lucide-react';
+import { Loader2, AlertCircle, LayoutGrid, Users, Sparkles, ClipboardList, Plus, BarChart3 } from 'lucide-react';
 import {
   getDraftState,
   draftPlayer,
@@ -106,6 +106,9 @@ export function DraftRoom() {
   const [activeTab, setActiveTab] = useState<DraftTab>('board');
   const [showActivity, setShowActivity] = useState(true);
 
+  // Stats view mode: actual (current season) or projected (XGBoost)
+  const [statsView, setStatsView] = useState<'actual' | 'projected'>('actual');
+
   // Filter state
   const [filters, setFilters] = useState<RecommendationFilters>(DEFAULT_FILTERS);
   const [skippedCount, setSkippedCount] = useState(0);
@@ -148,10 +151,11 @@ export function DraftRoom() {
   }, [roomId]);
 
   // --- Refresh functions ---
-  const refreshRoomState = useCallback(async (sid: number, currentFilters: RecommendationFilters) => {
+  const refreshRoomState = useCallback(async (sid: number, currentFilters: RecommendationFilters, view?: string) => {
+    const v = view ?? statsView;
     try {
       const [state, catRecs] = await Promise.all([
-        getRoomState(sid),
+        getRoomState(sid, v),
         getRoomRecommendations(sid, 10, {
           position: currentFilters.position,
           scoringMode: currentFilters.scoringMode,
@@ -160,7 +164,7 @@ export function DraftRoom() {
           minFpts: currentFilters.minFpts,
           maxFpts: currentFilters.maxFpts,
           affordability: currentFilters.affordability?.length ? currentFilters.affordability : undefined,
-        }),
+        }, v),
       ]);
       setDraftState(state);
       setRosterAnalysis(catRecs.roster_analysis);
@@ -170,12 +174,13 @@ export function DraftRoom() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh state');
     }
-  }, []);
+  }, [statsView]);
 
-  const refreshLegacyState = useCallback(async (sid: number, currentFilters: RecommendationFilters) => {
+  const refreshLegacyState = useCallback(async (sid: number, currentFilters: RecommendationFilters, view?: string) => {
+    const v = view ?? statsView;
     try {
       const [state, catRecs] = await Promise.all([
-        getDraftState(sid),
+        getDraftState(sid, v),
         getCategoryRecommendations(sid, 10, {
           position: currentFilters.position,
           scoringMode: currentFilters.scoringMode,
@@ -184,7 +189,7 @@ export function DraftRoom() {
           minFpts: currentFilters.minFpts,
           maxFpts: currentFilters.maxFpts,
           affordability: currentFilters.affordability?.length ? currentFilters.affordability : undefined,
-        }),
+        }, v),
       ]);
       setDraftState(state);
       setRosterAnalysis(catRecs.roster_analysis);
@@ -194,7 +199,7 @@ export function DraftRoom() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh state');
     }
-  }, []);
+  }, [statsView]);
 
   const refreshState = isRoomMode ? refreshRoomState : refreshLegacyState;
   const currentSessionId = isRoomMode ? roomId : sessionId;
@@ -215,7 +220,7 @@ export function DraftRoom() {
           ...prev,
         ]);
         if (roomId) {
-          refreshRoomState(roomId, filters);
+          refreshRoomState(roomId, filters, statsView);
           refreshBoard();
         }
         break;
@@ -233,7 +238,7 @@ export function DraftRoom() {
           ...prev,
         ]);
         if (roomId) {
-          refreshRoomState(roomId, filters);
+          refreshRoomState(roomId, filters, statsView);
           refreshBoard();
         }
         break;
@@ -259,7 +264,7 @@ export function DraftRoom() {
         refreshRoom();
         break;
     }
-  }, [roomId, filters, refreshRoomState, refreshBoard, refreshRoom]);
+  }, [roomId, filters, statsView, refreshRoomState, refreshBoard, refreshRoom]);
 
   const { status: wsStatus } = useRoomWebSocket({
     roomId: isRoomMode && room?.status === 'active' ? roomId : null,
@@ -401,9 +406,9 @@ export function DraftRoom() {
   const handleSearch = async (query: string, signal?: AbortSignal): Promise<PlayerSearchResult[]> => {
     if (!currentSessionId) return [];
     if (isRoomMode) {
-      return searchRoomPlayers(currentSessionId, query, true, signal);
+      return searchRoomPlayers(currentSessionId, query, true, signal, statsView);
     }
-    return searchPlayers(currentSessionId, query, true, signal);
+    return searchPlayers(currentSessionId, query, true, signal, statsView);
   };
 
   const handleBoardPlayerClick = async (playerId: string) => {
@@ -460,6 +465,7 @@ export function DraftRoom() {
     setSkippedCount(0);
     setError(null);
     setActiveTab('board');
+    setStatsView('actual');
     setDetailPlayer(null);
     setDetailOpen(false);
     setReportPickPreselect(null);
@@ -535,20 +541,19 @@ export function DraftRoom() {
   // Room Lobby
   if (pageView === 'lobby') {
     return (
-      <div className="min-h-screen bg-background">
-        <motion.header
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card border-b border-border"
-        >
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center">
-                <ClipboardList className="h-5 w-5 text-accent" />
+      <div className="min-h-[calc(100vh-3rem)] bg-background">
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <ClipboardList className="h-5 w-5 text-accent" />
+                </div>
+                <h1 className="text-lg font-bold text-foreground">Draft Rooms</h1>
               </div>
-              <h1 className="text-lg font-bold text-foreground">Fantasy Draft Room</h1>
-            </div>
-            <div className="flex items-center gap-3">
               <button
                 onClick={() => setPageView('legacy-picker')}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -556,14 +561,6 @@ export function DraftRoom() {
                 Solo Sessions
               </button>
             </div>
-          </div>
-        </motion.header>
-        <main className="max-w-7xl mx-auto px-4 py-8">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
             <RoomLobby onSelectRoom={handleSelectRoom} />
           </motion.div>
           {isLoading && (
@@ -594,33 +591,22 @@ export function DraftRoom() {
   // Legacy Session Picker (backward compat)
   if (pageView === 'legacy-picker') {
     return (
-      <div className="min-h-screen bg-background">
-        <motion.header
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card border-b border-border"
-        >
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setPageView('lobby')}
-                className="text-muted-foreground hover:text-foreground transition-colors text-sm"
-              >
-                Back to Rooms
-              </button>
-              <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center">
-                <ClipboardList className="h-5 w-5 text-accent" />
-              </div>
-              <h1 className="text-lg font-bold text-foreground">Solo Draft Sessions</h1>
-            </div>
-          </div>
-        </motion.header>
+      <div className="min-h-[calc(100vh-3rem)] bg-background">
         <main className="max-w-7xl mx-auto px-4 py-8">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
           >
+            <div className="flex items-center gap-3 mb-6">
+              <button
+                onClick={() => setPageView('lobby')}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                &larr; Back to Rooms
+              </button>
+              <span className="text-border">|</span>
+              <h1 className="text-lg font-bold text-foreground">Solo Draft Sessions</h1>
+            </div>
             <SessionPicker onSelectSession={handleSelectSession} />
           </motion.div>
           {isLoading && (
@@ -723,6 +709,40 @@ export function DraftRoom() {
 
             {/* Right controls */}
             <div className="flex items-center gap-2">
+              {/* Stats view toggle */}
+              <div className="flex items-center bg-input border border-border rounded-lg p-0.5">
+                <button
+                  onClick={() => {
+                    setStatsView('actual');
+                    if (currentSessionId) refreshState(currentSessionId, filters, 'actual');
+                  }}
+                  className={cn(
+                    'px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 flex items-center gap-1',
+                    statsView === 'actual'
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                >
+                  <BarChart3 className="h-3 w-3" />
+                  Actual
+                </button>
+                <button
+                  onClick={() => {
+                    setStatsView('projected');
+                    if (currentSessionId) refreshState(currentSessionId, filters, 'projected');
+                  }}
+                  className={cn(
+                    'px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 flex items-center gap-1',
+                    statsView === 'projected'
+                      ? 'bg-accent text-accent-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Projected
+                </button>
+              </div>
+
               {isRoomMode && (
                 <button
                   onClick={() => { setReportPickPreselect(null); setReportPickOpen(true); }}

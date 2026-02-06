@@ -314,6 +314,8 @@ export interface PlayerListResponse {
   page: number;
   per_page: number;
   total_pages: number;
+  season: string;
+  view: string;
 }
 
 export interface PlayerStatsSearchResult {
@@ -337,7 +339,22 @@ export interface PlayerStatsFilters {
   sortOrder: 'asc' | 'desc';
   page: number;
   perPage: number;
+  season?: string;
+  view?: 'actual' | 'projected';
 }
+
+export type StatsViewMode = {
+  season: string;
+  view: 'actual' | 'projected';
+  label: string;
+};
+
+export const STATS_VIEW_OPTIONS: StatsViewMode[] = [
+  { season: '2022-23', view: 'actual', label: '2022-23' },
+  { season: '2023-24', view: 'actual', label: '2023-24' },
+  { season: '2024-25', view: 'actual', label: '2024-25' },
+  { season: '2025-26', view: 'projected', label: '2025-26 Projected' },
+];
 
 // Authentication Types
 

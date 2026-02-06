@@ -79,8 +79,9 @@ export async function createDraftSession(
   return response.json();
 }
 
-export async function getDraftState(sessionId: number): Promise<DraftState> {
-  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}`, {
+export async function getDraftState(sessionId: number, view?: string): Promise<DraftState> {
+  const params = view ? `?view=${view}` : '';
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}${params}`, {
     credentials: 'include',
   });
 
@@ -161,9 +162,15 @@ export async function searchPlayers(
   query: string,
   includeTaken: boolean = false,
   signal?: AbortSignal,
+  view?: string,
 ): Promise<PlayerSearchResult[]> {
+  const params = new URLSearchParams();
+  params.set('q', query);
+  params.set('include_taken', String(includeTaken));
+  if (view) params.set('view', view);
+
   const response = await fetch(
-    `${API_URL}/api/v1/draft-sessions/${sessionId}/search?q=${encodeURIComponent(query)}&include_taken=${includeTaken}`,
+    `${API_URL}/api/v1/draft-sessions/${sessionId}/search?${params}`,
     { signal, credentials: 'include' },
   );
 
@@ -233,9 +240,11 @@ export async function getCategoryRecommendations(
   sessionId: number,
   topN: number = 10,
   filters?: RecommendationFilters,
+  view?: string,
 ): Promise<CategoryRecommendationsResponse> {
   const params = new URLSearchParams();
   params.set('top_n', topN.toString());
+  if (view) params.set('view', view);
 
   if (filters) {
     if (filters.position) params.set('position', filters.position);
@@ -412,8 +421,9 @@ export async function undoRoomPick(sessionId: number): Promise<{ status: string 
   return response.json();
 }
 
-export async function getRoomState(sessionId: number): Promise<DraftState> {
-  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}/state`, {
+export async function getRoomState(sessionId: number, view?: string): Promise<DraftState> {
+  const params = view ? `?view=${view}` : '';
+  const response = await fetch(`${API_URL}/api/v1/draft-sessions/${sessionId}/state${params}`, {
     credentials: 'include',
   });
 
@@ -442,9 +452,11 @@ export async function getRoomRecommendations(
   sessionId: number,
   topN: number = 10,
   filters?: RecommendationFilters,
+  view?: string,
 ): Promise<CategoryRecommendationsResponse> {
   const params = new URLSearchParams();
   params.set('top_n', topN.toString());
+  if (view) params.set('view', view);
 
   if (filters) {
     if (filters.position) params.set('position', filters.position);
@@ -475,9 +487,15 @@ export async function searchRoomPlayers(
   query: string,
   includeTaken: boolean = false,
   signal?: AbortSignal,
+  view?: string,
 ): Promise<PlayerSearchResult[]> {
+  const params = new URLSearchParams();
+  params.set('q', query);
+  params.set('include_taken', String(includeTaken));
+  if (view) params.set('view', view);
+
   const response = await fetch(
-    `${API_URL}/api/v1/draft-sessions/${sessionId}/room-search?q=${encodeURIComponent(query)}&include_taken=${includeTaken}`,
+    `${API_URL}/api/v1/draft-sessions/${sessionId}/room-search?${params}`,
     { signal, credentials: 'include' },
   );
 

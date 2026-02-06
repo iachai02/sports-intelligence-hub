@@ -4,6 +4,7 @@ import logging
 import time
 from typing import Literal
 
+from draft_optimizer.projection_service import load_projected_players
 from draft_optimizer.real_data import load_real_players_from_api
 from draft_optimizer.schemas import PlayerProjection, Position
 from fastapi import APIRouter, HTTPException, Query
@@ -13,16 +14,19 @@ router = APIRouter(prefix="/api/v1/players", tags=["players"])
 logger = logging.getLogger(__name__)
 
 # In-memory cache for player data (1 hour TTL)
+# Key format: "{season}_{view}" e.g. "2024-25_actual", "2025-26_projected"
 _player_cache: dict[str, list[PlayerProjection]] = {}
 _cache_timestamp: float = 0
 CACHE_TTL_SECONDS = 3600  # 1 hour
 
 
-def _get_cached_players(season: str = "2024-25") -> list[PlayerProjection]:
-    """Get players from cache or load from API."""
+def _get_cached_players(
+    season: str = "2024-25", view: str = "actual"
+) -> list[PlayerProjection]:
+    """Get players from cache or load from API/projector."""
     global _player_cache, _cache_timestamp
 
-    cache_key = season
+    cache_key = f"{season}_{view}"
     current_time = time.time()
 
     # Check if cache is valid
@@ -30,13 +34,17 @@ def _get_cached_players(season: str = "2024-25") -> list[PlayerProjection]:
         return _player_cache[cache_key]
 
     # Load fresh data
-    logger.info(f"Loading player data for season {season} (cache miss or expired)")
-    players = load_real_players_from_api(season=season, min_games=20)
+    if view == "projected":
+        logger.info(f"Loading projected player data for {season} (cache miss or expired)")
+        players = load_projected_players(target_season=season)
+    else:
+        logger.info(f"Loading player data for season {season} (cache miss or expired)")
+        players = load_real_players_from_api(season=season, min_games=20)
 
     if not players:
         raise HTTPException(
             status_code=500,
-            detail="Failed to load player data from NBA API",
+            detail=f"Failed to load player data for {season} ({view})",
         )
 
     # Update cache
@@ -77,6 +85,8 @@ class PlayerListResponse(BaseModel):
     page: int
     per_page: int
     total_pages: int
+    season: str = "2024-25"
+    view: str = "actual"
 
 
 class PlayerDetail(BaseModel):
@@ -217,9 +227,11 @@ async def get_players(
     team: str | None = Query(default=None, description="Filter by team abbreviation"),
     sort_by: str = Query(default="auction_value", description="Column to sort by"),
     sort_order: Literal["asc", "desc"] = Query(default="desc", description="Sort order"),
+    season: str = Query(default="2024-25", description="NBA season"),
+    view: str = Query(default="actual", description="'actual' or 'projected'"),
 ) -> PlayerListResponse:
     """List players with pagination, filtering, and sorting."""
-    players = _get_cached_players()
+    players = _get_cached_players(season=season, view=view)
 
     # Filter by search
     if search:
@@ -277,6 +289,8 @@ async def get_players(
         page=page,
         per_page=per_page,
         total_pages=total_pages,
+        season=season,
+        view=view,
     )
 
 
@@ -284,9 +298,11 @@ async def get_players(
 async def search_players(
     q: str = Query(..., min_length=2, description="Search query"),
     limit: int = Query(default=10, ge=1, le=20, description="Maximum results"),
+    season: str = Query(default="2024-25", description="NBA season"),
+    view: str = Query(default="actual", description="'actual' or 'projected'"),
 ) -> list[PlayerSearchResult]:
     """Fast typeahead search for player names."""
-    players = _get_cached_players()
+    players = _get_cached_players(season=season, view=view)
 
     q_lower = q.lower()
     matches = [p for p in players if q_lower in p.name.lower()]
@@ -309,18 +325,25 @@ async def search_players(
 
 
 @router.get("/teams", response_model=list[str])
-async def get_teams() -> list[str]:
+async def get_teams(
+    season: str = Query(default="2024-25", description="NBA season"),
+    view: str = Query(default="actual", description="'actual' or 'projected'"),
+) -> list[str]:
     """Get list of all teams for dropdown."""
-    players = _get_cached_players()
+    players = _get_cached_players(season=season, view=view)
 
     teams = sorted(set(p.team for p in players))
     return teams
 
 
 @router.get("/{player_id}", response_model=PlayerDetail)
-async def get_player(player_id: str) -> PlayerDetail:
+async def get_player(
+    player_id: str,
+    season: str = Query(default="2024-25", description="NBA season"),
+    view: str = Query(default="actual", description="'actual' or 'projected'"),
+) -> PlayerDetail:
     """Get full details for a specific player."""
-    players = _get_cached_players()
+    players = _get_cached_players(season=season, view=view)
 
     for player in players:
         if player.id == player_id:
@@ -330,9 +353,13 @@ async def get_player(player_id: str) -> PlayerDetail:
 
 
 @router.post("/compare", response_model=ComparisonResponse)
-async def compare_players(request: CompareRequest) -> ComparisonResponse:
+async def compare_players(
+    request: CompareRequest,
+    season: str = Query(default="2024-25", description="NBA season"),
+    view: str = Query(default="actual", description="'actual' or 'projected'"),
+) -> ComparisonResponse:
     """Compare 2-3 players side by side."""
-    players = _get_cached_players()
+    players = _get_cached_players(season=season, view=view)
 
     # Build lookup
     player_map = {p.id: p for p in players}

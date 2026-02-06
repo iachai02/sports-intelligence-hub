@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, ChevronDown, Loader2 } from 'lucide-react';
+import { Search, X, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import type { PlayerStatsFilters, PlayerStatsSearchResult } from '../../lib/types';
+import { STATS_VIEW_OPTIONS } from '../../lib/types';
 import { searchPlayers } from '../../lib/playerStatsApi';
 import { cn } from '../../lib/utils';
 
@@ -43,7 +44,10 @@ export function PlayerStatsFiltersPanel({
 
       setIsSearching(true);
       try {
-        const results = await searchPlayers(searchQuery, 10, abortControllerRef.current.signal);
+        const results = await searchPlayers(
+          searchQuery, 10, abortControllerRef.current.signal,
+          filters.season, filters.view,
+        );
         setSearchResults(results);
         setShowDropdown(true);
       } catch (error) {
@@ -61,7 +65,7 @@ export function PlayerStatsFiltersPanel({
         abortControllerRef.current.abort();
       }
     };
-  }, [searchQuery]);
+  }, [searchQuery, filters.season, filters.view]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -184,6 +188,35 @@ export function PlayerStatsFiltersPanel({
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+
+      {/* Season / View Mode Selector */}
+      <div className="flex items-center bg-input border border-border rounded-lg p-1">
+        {STATS_VIEW_OPTIONS.map((opt) => {
+          const isActive = (filters.season || '2024-25') === opt.season
+            && (filters.view || 'actual') === opt.view;
+          return (
+            <button
+              key={`${opt.season}_${opt.view}`}
+              onClick={() => onFiltersChange({
+                ...filters,
+                season: opt.season,
+                view: opt.view,
+                page: 1,
+              })}
+              className={cn(
+                'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-150 flex items-center gap-1.5',
+                isActive
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              )}
+              aria-pressed={isActive}
+            >
+              {opt.view === 'projected' && <Sparkles className="h-3.5 w-3.5" />}
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Filter Row */}
